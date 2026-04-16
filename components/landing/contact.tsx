@@ -7,8 +7,6 @@ export function Contact() {
       <div className="cta-panel">
         <span className="tag">{contact.label}</span>
         <h2>{contact.title}</h2>
-        <p>{contact.description}</p>
-
         <div className="cta-panel__actions">
           <a href={`tel:${contact.phone}`} className="button button--primary">
             전화 상담 {contact.phone}
