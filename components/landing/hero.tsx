@@ -13,7 +13,7 @@ export function Hero() {
           <p className="eyebrow">{hero.eyebrow}</p>
           <h1 className="hero__title">
             {hero.title.map((line) => (
-              <span key={line} className={line.includes("jainetimes") ? "hero__title--accent" : ""}>
+              <span key={line} className={line.includes("jaintimes") ? "hero__title--accent" : ""}>
                 {line}
               </span>
             ))}
@@ -58,7 +58,7 @@ export function Hero() {
             <div className="logo-mark">
               <span className="logo-mark__shape" />
               <div>
-                <strong>jainetimes</strong>
+                <strong>jaintimes</strong>
                 <span>english</span>
               </div>
             </div>
@@ -66,7 +66,7 @@ export function Hero() {
             <div className="hero-visual-card__image">
               <Image
                 src="/images/hero-v2.png"
-                alt="jainetimes english 소개 이미지"
+                alt="jaintimes english 소개 이미지"
                 fill
                 priority
                 sizes="(max-width: 1024px) 100vw, 42vw"

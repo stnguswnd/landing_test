@@ -68,7 +68,7 @@ export function SectionNav() {
         <a
           href="#hero"
           className="topbar__brand"
-          aria-label="jainetimes english home"
+          aria-label="jaintimes english home"
           onClick={(event) => {
             event.preventDefault();
             onNavigate("hero");
@@ -76,7 +76,7 @@ export function SectionNav() {
         >
           <span className="topbar__brand-mark" />
           <span className="topbar__brand-text">
-            <strong>jainetimes</strong>
+            <strong>jaintimes</strong>
             <span>english</span>
           </span>
         </a>

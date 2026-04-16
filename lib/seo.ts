@@ -1,10 +1,26 @@
+function resolveSiteUrl() {
+  const envUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    process.env.SITE_URL ??
+    process.env.VERCEL_PROJECT_PRODUCTION_URL ??
+    process.env.VERCEL_URL;
+
+  if (!envUrl) {
+    return "http://localhost:3000";
+  }
+
+  const normalizedUrl = envUrl.startsWith("http") ? envUrl : `https://${envUrl}`;
+
+  return normalizedUrl.replace(/\/$/, "");
+}
+
 export const siteConfig = {
-  name: "jainetimes english",
-  title: "jainetimes english | 초등 영어 홈스쿨링 랜딩 페이지",
+  name: "jaintimes english",
+  title: "jaintimes english",
   description:
-    "문해력, 듣기, 쓰기, 말하기, 독해, 어휘, 문법까지 2년 커리큘럼으로 연결하는 jainetimes english 랜딩 페이지입니다.",
-  url: "https://example.com",
-  ogImage: "/images/jainetimes-hero.jpg",
+    "문해력, 듣기, 쓰기, 말하기, 독해, 어휘, 문법까지 2년 커리큘럼으로 연결하는 jaintimes english 랜딩 페이지입니다.",
+  url: resolveSiteUrl(),
+  ogImage: "/images/jaintimes-hero.jpg",
   phone: "01027601568",
 };
 

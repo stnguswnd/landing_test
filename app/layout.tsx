@@ -6,17 +6,22 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
   title: siteConfig.title,
   description: siteConfig.description,
+  alternates: {
+    canonical: siteConfig.url,
+  },
   keywords: [
     "초등 영어 홈스쿨링",
-    "jainetimes english",
+    "jaintimes english",
     "초등 영어",
     "영어 커리큘럼",
-    "영어 레벨업",
+    "영어 학원",
   ],
   openGraph: {
     title: siteConfig.title,
     description: siteConfig.description,
     type: "website",
+    url: siteConfig.url,
+    siteName: siteConfig.name,
     images: [{ url: siteConfig.ogImage, width: 869, height: 1500, alt: siteConfig.title }],
   },
   twitter: {
