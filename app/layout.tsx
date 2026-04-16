@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   },
   keywords: [
     "초등 영어 홈스쿨링",
-    "jaintimes english",
+    "janetimes english",
     "초등 영어",
     "영어 커리큘럼",
     "영어 학원",

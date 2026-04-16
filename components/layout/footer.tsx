@@ -5,7 +5,7 @@ export function Footer() {
     <footer className="footer">
       <Container>
         <div className="footer__inner">
-          <div className="footer__logo">jaintimes <span>english</span></div>
+          <div className="footer__logo">janetimes <span>english</span></div>
         </div>
       </Container>
     </footer>

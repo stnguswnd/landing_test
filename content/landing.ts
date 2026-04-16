@@ -11,7 +11,7 @@ export const navigation: Array<{ id: SectionId; label: string }> = [
 
 export const hero = {
   eyebrow: "초등 영어 홈스쿨링",
-  title: ["영어를 오래 잘하는 힘,", "초등부터 jaintimes english 에서", "차근히 완성합니다."],
+  title: ["영어를 오래 잘하는 힘,", "초등부터 janetimes english 에서", "차근히 완성합니다."],
   description:
     "문해력, 읽기, 쓰기, 말하기, 독해, 어휘, 문법까지 2년 커리큘럼으로 연결하고, 학생 성향에 맞춘 관리 방식으로 영어를 꾸준히 쌓아 올립니다.",
   strengths: [
@@ -57,7 +57,7 @@ export const teacherProfile = {
 
 export const curriculumIntro = {
   tag: "커리큘럼",
-  title: "jaintimes 2년 과정으로 중·고등학교 수준까지 Level-Up!",
+  title: "janetimes 2년 과정으로 중·고등학교 수준까지 Level-Up!",
   description:
     "처음에는 과정 간 차이를 빠르게 이해하고, 관심 있는 수업만 자세히 살펴볼 수 있도록 구성했습니다. 과정이 많아 보여도 실제 흐름은 단순하고 목표는 명확합니다.",
   highlight:
