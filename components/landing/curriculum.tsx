@@ -8,7 +8,7 @@ export function Curriculum() {
   const [openProgram, setOpenProgram] = useState("");
 
   return (
-    <Section id="curriculum">
+    <Section id="curriculum" className="curriculum-section">
       <div className="section-heading">
         <span className="tag">{curriculumIntro.tag}</span>
         <h2>{curriculumIntro.title}</h2>

@@ -28,7 +28,7 @@ export function Roadmap() {
 
         <div className="roadmap-image-card">
           <Image
-            src="/images/loadmap.png"
+            src="/images/03.png"
             alt="로드맵 다이어그램 이미지"
             width={588}
             height={888}

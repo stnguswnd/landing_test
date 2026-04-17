@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { navigation } from "@/content/landing";
 import { getScrollTargetTop, scrollToSectionById } from "@/lib/scroll";
@@ -74,11 +75,14 @@ export function SectionNav() {
             onNavigate("hero");
           }}
         >
-          <span className="topbar__brand-mark" />
-          <span className="topbar__brand-text">
-            <strong>janetimes</strong>
-            <span>english</span>
-          </span>
+          <Image
+            src="/images/color-logo.png"
+            alt="janetimes english"
+            width={6432}
+            height={3464}
+            priority
+            className="topbar__brand-logo"
+          />
         </a>
 
         <nav className="topbar__nav topbar__nav--desktop" aria-label="Primary sections">

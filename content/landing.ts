@@ -11,13 +11,13 @@ export const navigation: Array<{ id: SectionId; label: string }> = [
 
 export const hero = {
   eyebrow: "초등 영어 홈스쿨링",
-  title: ["영어를 오래 잘하는 힘,", "초등부터 janetimes english 에서", "차근히 완성합니다."],
-  description:
-    "문해력, 읽기, 쓰기, 말하기, 독해, 어휘, 문법까지 2년 커리큘럼으로 연결하고, 학생 성향에 맞춘 관리 방식으로 영어를 꾸준히 쌓아 올립니다.",
+  title: ["영어를 오래 잘하는 힘,", "초등부터 완성합니다."],
+  description: "초등 2년안에 중고등학생의 영어수준까지!",
   strengths: [
     {
       title: "2년 커리큘럼",
-      description: "초등부터 중·고등학교 수준까지 자연스럽게 이어지는 성장 단계",
+      description:
+        "파닉스 5단계, 읽기, 쓰기, 말하기, 독해, 어휘, 문법까지 2년안에!",
     },
     {
       title: "직접 관리형 수업",
@@ -49,17 +49,13 @@ export const teacherProfile = {
     "YBM 어학원 강사 출신",
     "MTAC 교원 자격증",
     "YBM Award Winner",
-    "영어교육 기반 수업 운영",
-    "실전 Level-up 경험 다수",
-    "초등부터 중등 연결 지도",
   ],
 };
 
 export const curriculumIntro = {
   tag: "커리큘럼",
-  title: "janetimes 2년 과정으로 중·고등학교 수준까지 Level-Up!",
-  description:
-    "처음에는 과정 간 차이를 빠르게 이해하고, 관심 있는 수업만 자세히 살펴볼 수 있도록 구성했습니다. 과정이 많아 보여도 실제 흐름은 단순하고 목표는 명확합니다.",
+  title: "2년 과정으로 중·고등학교 수준까지 LEVEL UP!",
+
   highlight:
     "영어 읽기, 쓰기, 말하기, 독해, 어휘, 문법을 단계별로 연결하는 2년형 집중 커리큘럼",
 };
@@ -139,29 +135,34 @@ export const programs = [
 
 export const roadmap = {
   tag: "로드맵",
-  title: "초등에서 시작해 중·고등 영어까지 이어지는 성장 흐름",
+  title: "국내·해외 모두에 강한 인재 양성은 초등학교 때부터 이미 시작됩니다.",
   intro:
     "복잡해 보이는 과정을 단계별 목표 중심으로 재구성했습니다. 우리 아이가 지금 어디쯤인지, 다음 단계에서 무엇을 준비해야 하는지 빠르게 파악할 수 있습니다.",
   steps: [
     {
       title: "1단계. 기초 읽기 완성",
-      description: "Phonics, 정확한 발음, 기본 문장 읽기와 쓰기 기초를 익힙니다.",
+      description:
+        "Phonics, 정확한 발음, 기본 문장 읽기와 쓰기 기초를 익힙니다.",
     },
     {
       title: "2단계. 문장 확장 훈련",
-      description: "빠른 읽기와 정확한 문장 구성을 바탕으로 읽기와 쓰기의 균형을 맞춥니다.",
+      description:
+        "빠른 읽기와 정확한 문장 구성을 바탕으로 읽기와 쓰기의 균형을 맞춥니다.",
     },
     {
       title: "3단계. 학교 영어 대비",
-      description: "중등 진학 전 필요한 문법, 독해, 서술형 대응력을 체계적으로 완성합니다.",
+      description:
+        "중등 진학 전 필요한 문법, 독해, 서술형 대응력을 체계적으로 완성합니다.",
     },
     {
       title: "4단계. 실전 연결",
-      description: "영어권 학습, 학교 수업 연계, 심화 학습과 시험 대비까지 자연스럽게 이어갑니다.",
+      description:
+        "영어권 학습, 학교 수업 연계, 심화 학습과 시험 대비까지 자연스럽게 이어갑니다.",
     },
     {
       title: "5단계. 장기 성장",
-      description: "장기적으로는 국내외 어디서도 흔들리지 않는 영어 실력을 목표로 합니다.",
+      description:
+        "장기적으로는 국내외 어디서도 흔들리지 않는 영어 실력을 목표로 합니다.",
     },
   ],
 };
@@ -193,7 +194,7 @@ export const points = [
 
 export const contact = {
   label: "상담 문의",
-  title: "상담부터 커리큘럼 안내까지 바로 연결해드립니다.",
+  title: "상담 & 커리큘럼 안내",
   description: "",
   name: "JANE",
   phone: "01027601568",

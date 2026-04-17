@@ -3,6 +3,7 @@ import { Curriculum } from "@/components/landing/curriculum";
 import { Hero } from "@/components/landing/hero";
 import { Points } from "@/components/landing/points";
 import { Roadmap } from "@/components/landing/roadmap";
+import { ShowcaseCarousel } from "@/components/landing/showcase-carousel";
 import { TeacherProfile } from "@/components/landing/teacher-profile";
 import { Footer } from "@/components/layout/footer";
 import { MobileStickyCta } from "@/components/layout/mobile-sticky-cta";
@@ -42,6 +43,7 @@ export default function HomePage() {
         <Curriculum />
         <Roadmap />
         <Points />
+        <ShowcaseCarousel />
         <Contact />
         <MobileStickyCta />
       </main>
