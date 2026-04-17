@@ -9,7 +9,7 @@ import { Footer } from "@/components/layout/footer";
 import { MobileStickyCta } from "@/components/layout/mobile-sticky-cta";
 import { SectionNav } from "@/components/layout/section-nav";
 import { siteConfig } from "@/lib/seo";
-import { contact, points } from "@/content/landing";
+import { contact } from "@/content/landing";
 
 export default function HomePage() {
   const schema = {
@@ -19,19 +19,6 @@ export default function HomePage() {
     description: siteConfig.description,
     telephone: contact.phone,
     url: siteConfig.url,
-  };
-
-  const faqSchema = {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    mainEntity: points.map((item) => ({
-      "@type": "Question",
-      name: item.title.replaceAll("\n", " "),
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: `${item.description} ${item.quote} ${item.result}`,
-      },
-    })),
   };
 
   return (
@@ -51,10 +38,6 @@ export default function HomePage() {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
-      />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
       />
     </>
   );
