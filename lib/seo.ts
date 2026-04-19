@@ -1,3 +1,11 @@
+export type SectionId =
+  | "hero"
+  | "teacher"
+  | "curriculum"
+  | "roadmap"
+  | "system"
+  | "contact";
+
 function resolveSiteUrl() {
   const envUrl =
     process.env.NEXT_PUBLIC_SITE_URL ??
