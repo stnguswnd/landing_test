@@ -25,7 +25,10 @@ export function Hero() {
             <p className="eyebrow">{hero.eyebrow}</p>
             <h1 className="hero__title">
               {hero.title.map((line) => (
-                <span key={line} className={line.includes("janetimes") ? "hero__title--accent" : ""}>
+                <span
+                  key={line}
+                  className={line.includes("janetimes") ? "hero__title--accent" : ""}
+                >
                   {line}
                 </span>
               ))}

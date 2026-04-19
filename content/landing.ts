@@ -45,19 +45,20 @@ export const teacherProfile = {
   ],
   highlights: [
     "Univ. of Southern California (USC)",
-    "미국 교원 자격 보유",
-    "YBM 어학원 강사 출신",
-    "MTAC 교원 자격증",
+    "미국 교원 자격 MTAC 보유",
     "YBM Award Winner",
+    "다년간의 교육 경험",
+    "원어교육 (미국 시민권자)",
+    "단시간의 Level-up!",
   ],
 };
 
 export const curriculumIntro = {
   tag: "커리큘럼",
-  title: "2년 과정으로 중·고등학교 수준까지 LEVEL UP!",
+  title: "미국 현지 학교에 적용되는 공부와 동일한 수준으로 Level Up!",
 
   highlight:
-    "영어 읽기, 쓰기, 말하기, 독해, 어휘, 문법을 단계별로 연결하는 2년형 집중 커리큘럼",
+    "2년 초집중 커리큘럼 : Phonics 5단게 + 영어 듣기, 쓰기, 말하기, 독해, 어휘, 그리고 문법",
 };
 
 export const programs = [

@@ -9,18 +9,11 @@ export function Contact() {
         <h2>{contact.title}</h2>
         <div className="cta-panel__actions">
           <a href={`tel:${contact.phone}`} className="button button--primary">
-            전화 상담 {contact.phone}
+            전화문의 {contact.phone}
           </a>
           <a href={`tel:${contact.phone}`} className="button button--secondary">
             {contact.kakaoLabel}
           </a>
-        </div>
-
-        <div className="cta-panel__meta">
-          <strong>
-            {contact.name} {contact.phone}
-          </strong>
-          <span>{contact.bank}</span>
         </div>
       </div>
     </Section>

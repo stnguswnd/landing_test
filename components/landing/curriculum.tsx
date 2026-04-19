@@ -28,15 +28,11 @@ export function Curriculum() {
 
             <div className="program-meta">
               <div>
-                <span>수업 빈도</span>
+                <span>수업빈도</span>
                 <strong>{program.frequency}</strong>
               </div>
               <div>
-                <span>가격</span>
-                <strong>{program.price}</strong>
-              </div>
-              <div>
-                <span>수업 시간</span>
+                <span>참고사항</span>
                 <strong>{program.duration}</strong>
               </div>
             </div>
