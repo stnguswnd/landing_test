@@ -45,6 +45,10 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <head>
+        <meta
+          name="naver-site-verification"
+          content="c64dae7157cb2b07393e91efbecd427e7377bb62"
+        />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           rel="preconnect"
