@@ -13,7 +13,7 @@ import { siteConfig } from "@/lib/seo";
 import { contact } from "@/content/landing";
 
 export const metadata: Metadata = {
-  title: "인천 영어학원 · 영종도 초등 영어 · 제인타임즈",
+  title: "인천 영어학원 · 영종도 초등 영어 · 재인타임즈",
   description:
     "인천 영종도에서 초등 영어를 중심으로 문해력, 듣기, 쓰기, 말하기, 독해, 어휘, 문법까지 체계적으로 연결하는 Janetimes English 영어 프로그램을 소개합니다.",
   alternates: {
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     "영어 커리큘럼",
   ],
   openGraph: {
-    title: "인천 영어학원 · 영종도 초등 영어 · 제인타임즈",
+    title: "인천 영어학원 · 영종도 초등 영어 · 재인타임즈",
     description:
       "인천 영종도에서 초등 영어를 중심으로 문해력, 듣기, 쓰기, 말하기, 독해, 어휘, 문법까지 체계적으로 연결하는 Janetimes English 영어 프로그램을 소개합니다.",
     url: "/",
@@ -49,7 +49,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "인천 영어학원 · 영종도 초등 영어 · 제인타임즈",
+    title: "인천 영어학원 · 영종도 초등 영어 · 재인타임즈",
     description:
       "인천 영종도에서 초등 영어를 중심으로 문해력, 듣기, 쓰기, 말하기, 독해, 어휘, 문법까지 체계적으로 연결하는 Janetimes English 영어 프로그램을 소개합니다.",
     images: [siteConfig.ogImage],
@@ -61,7 +61,7 @@ export default function HomePage() {
     "@context": "https://schema.org",
     "@type": "EducationalOrganization",
     name: siteConfig.name,
-    alternateName: ["Janetimes English", "제인타임즈", "재인타임즈"],
+    alternateName: ["Janetimes English", "재인타임즈"],
     description: siteConfig.description,
     telephone: contact.phone,
     url: siteConfig.url,
