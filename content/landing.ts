@@ -65,9 +65,9 @@ export const programs = [
   {
     name: "파닉스 기초반",
     target: "초등 기초 다지기",
-    frequency: "주 1회 / 주 2회",
+    frequency: "주 1~3회",
     price: "월 10만원 / 20만원",
-    duration: "회당 60분",
+    duration: "1회(1 time) 50분",
     summary: "파닉스와 기본 문장 읽기를 정확하게 잡는 입문 과정",
     details:
       "영어 알파벳과 기본 문장 구조를 정확하게 익히고, 발음과 읽기를 자연스럽게 연결하는 기초 수업입니다.",
@@ -75,9 +75,9 @@ export const programs = [
   {
     name: "STEPS",
     target: "초등 고학년 기본반",
-    frequency: "주 2회 / 주 3회",
+    frequency: "주 3회",
     price: "월 20만원 / 30만원",
-    duration: "회당 90분",
+    duration: "1회(1 time) 50분",
     summary: "중등 진학 전에 필요한 기반을 탄탄하게 만드는 집중 과정",
     details:
       "중등 영어로 넘어가기 전 필요한 문법, 어휘, 독해 기초를 정리하고 영어 문장 확장 과정으로 자연스럽게 이어집니다.",
@@ -85,9 +85,9 @@ export const programs = [
   {
     name: "BOOST",
     target: "심화 학습 및 시험 대비",
-    frequency: "주 2회 / 주 3회",
+    frequency: "주 1~3회",
     price: "월 20만원 / 30만원",
-    duration: "회당 90분",
+    duration: "1회(1 time) 50분",
     summary: "영어 5대 영역을 고르게 다지며 문장 구성과 독해를 강화하는 과정",
     details:
       "읽기, 쓰기, 말하기, 독해, 어휘와 문법을 통합해 영어 문장 감각을 키우고 시험형 학습까지 폭넓게 연결합니다.",
@@ -105,7 +105,7 @@ export const programs = [
   {
     name: "SEP-C 말하기반",
     target: "말하기 보완",
-    frequency: "주 2회",
+    frequency: "월 2회",
     price: "월 10만원",
     duration: "실전 발화",
     summary: "발화 자신감과 말하기 리듬을 강화하는 보완 프로그램",
@@ -125,7 +125,7 @@ export const programs = [
   {
     name: "신문 읽기반",
     target: "리딩 심화",
-    frequency: "주 2회",
+    frequency: "월 2회",
     price: "월 10만원",
     duration: "Times For Kid / Jr. Herald",
     summary: "시사와 리딩을 함께 다루며 배경지식과 독해력을 넓히는 과정",
