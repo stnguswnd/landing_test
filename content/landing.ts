@@ -63,11 +63,11 @@ export const curriculumIntro = {
 
 export const programs = [
   {
-    name: "파닉스 기초반",
+    name: "ALPHA",
     target: "초등 기초 다지기",
     frequency: "주 1~3회",
     price: "월 10만원 / 20만원",
-    duration: "1회(1 time) 50분",
+    duration: "1회(1 time) 60분",
     summary: "파닉스와 기본 문장 읽기를 정확하게 잡는 입문 과정",
     details:
       "영어 알파벳과 기본 문장 구조를 정확하게 익히고, 발음과 읽기를 자연스럽게 연결하는 기초 수업입니다.",
@@ -114,7 +114,7 @@ export const programs = [
   },
   {
     name: "쓰기 읽기반",
-    target: "라이팅 보완",
+    target: "글쓰기",
     frequency: "주 1회",
     price: "월 10만원",
     duration: "라이팅 트레이닝",
