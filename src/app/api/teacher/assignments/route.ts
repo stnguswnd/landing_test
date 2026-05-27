@@ -293,11 +293,12 @@ export async function GET(request: Request) {
             ) as student_names
           from assignment_targets at
           join assignments a on a.id = at.assignment_id
-          left join classes c on c.id = at.class_id and c.teacher_id = a.teacher_id
+          left join classes c on c.id = at.class_id and c.teacher_id = a.teacher_id and c.status = 'active'
           left join class_subjects csu on csu.id = at.class_subject_id and csu.teacher_id = a.teacher_id
           left join students s on s.id = at.student_id and s.teacher_id = a.teacher_id
           where a.teacher_id = $1
             and at.status <> 'cancelled'
+            and (at.class_id is null or c.id is not null)
           group by at.assignment_id, at.class_id, c.name, at.class_subject_id, csu.name
         )
         select

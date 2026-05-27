@@ -58,8 +58,19 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ass
         sub.status as submission_status
       from assignments a
       left join assignment_targets at on at.assignment_id = a.id
+        and at.status <> 'cancelled'
+        and (
+          at.class_id is null
+          or exists (
+            select 1
+            from classes active_class
+            where active_class.id = at.class_id
+              and active_class.teacher_id = a.teacher_id
+              and active_class.status = 'active'
+          )
+        )
       left join students s on s.id = at.student_id and s.teacher_id = a.teacher_id
-      left join classes c on c.id = at.class_id and c.teacher_id = a.teacher_id
+      left join classes c on c.id = at.class_id and c.teacher_id = a.teacher_id and c.status = 'active'
       left join class_subjects cs on cs.id = at.class_subject_id and cs.teacher_id = a.teacher_id
       left join submissions sub on sub.assignment_id = a.id and sub.student_id = at.student_id
       where a.id = $1
@@ -92,7 +103,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ass
 
   for (const row of result.rows) {
     if (!row.target_id || !row.student_id) continue;
-    if (row.target_status === "cancelled") continue;
     const classId = row.class_id ?? "unassigned";
     const group = groups.get(classId) ?? {
       classId,
@@ -163,7 +173,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ass
   }
 
   if (body?.classId) {
-    const classResult = await query("select id from classes where id = $1 and teacher_id = $2 limit 1", [body.classId, teacherId]);
+    const classResult = await query("select id from classes where id = $1 and teacher_id = $2 and status = 'active' limit 1", [body.classId, teacherId]);
     if (!classResult.rows[0]) {
       return NextResponse.json({ error: "반을 찾을 수 없습니다." }, { status: 400 });
     }

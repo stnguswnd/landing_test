@@ -136,6 +136,13 @@ export function StudentManagementView({ initialStudents }: { initialStudents: Ma
     setToast("학생이 비활성화되었습니다.");
   }
 
+  async function reactivateSelectedStudent() {
+    if (!selectedStudent) return;
+    const nextStudents = await studentRepository.updateStudent(selectedStudent.id, { status: "active" }, students);
+    setStudents(nextStudents);
+    setToast("학생이 재활성화되었습니다.");
+  }
+
   async function changePassword(password: string) {
     if (!selectedStudent || !passwordTarget) return;
     const nextStudents = await studentRepository.updateStudent(
@@ -189,6 +196,7 @@ export function StudentManagementView({ initialStudents }: { initialStudents: Ma
           onStudentPassword={() => setPasswordTarget("student")}
           onParentPassword={() => setPasswordTarget("parent")}
           onDelete={() => setIsDeleteConfirmOpen(true)}
+          onReactivate={reactivateSelectedStudent}
           onUpdate={updateSelectedStudent}
           learningHistory={learningHistory}
           classes={classes}
@@ -271,6 +279,7 @@ function StudentDetailPanel({
   onStudentPassword,
   onParentPassword,
   onDelete,
+  onReactivate,
   onUpdate,
   learningHistory,
   classes,
@@ -282,6 +291,7 @@ function StudentDetailPanel({
   onStudentPassword: () => void;
   onParentPassword: () => void;
   onDelete: () => void;
+  onReactivate: () => void;
   onUpdate: (input: Partial<ManagedStudent>) => void;
   learningHistory: StudentLearningHistory[];
   classes: Class[];
@@ -331,6 +341,7 @@ function StudentDetailPanel({
             onStudentPassword={onStudentPassword}
             onParentPassword={onParentPassword}
             onDelete={onDelete}
+            onReactivate={onReactivate}
             onUpdate={onUpdate}
           />
         )}
@@ -374,6 +385,7 @@ function DetailTab({
   onStudentPassword,
   onParentPassword,
   onDelete,
+  onReactivate,
   onUpdate,
 }: {
   student: ManagedStudent;
@@ -381,6 +393,7 @@ function DetailTab({
   onStudentPassword: () => void;
   onParentPassword: () => void;
   onDelete: () => void;
+  onReactivate: () => void;
   onUpdate: (input: Partial<ManagedStudent>) => void;
 }) {
   const [draft, setDraft] = useState(student);
@@ -446,7 +459,11 @@ function DetailTab({
         </DetailRow>
       </div>
       <div className="grid gap-2 sm:flex sm:justify-end">
-        <Button variant="danger" onClick={onDelete}>학생 비활성화</Button>
+        {student.status === "inactive" ? (
+          <Button onClick={onReactivate}>학생 재활성화</Button>
+        ) : (
+          <Button variant="danger" onClick={onDelete}>학생 비활성화</Button>
+        )}
         <Button onClick={() => onUpdate({ ...draft, classIds: selectedClassIds })}>정보 수정</Button>
       </div>
     </div>

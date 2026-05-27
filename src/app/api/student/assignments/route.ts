@@ -207,6 +207,16 @@ export async function GET() {
       left join teacher_feedback tf on tf.submission_id = sub.id and tf.teacher_id = a.teacher_id
       where at.student_id = $1
         and at.status <> 'cancelled'
+        and (
+          coalesce(at.class_id, a.class_id) is null
+          or exists (
+            select 1
+            from classes c
+            where c.id = coalesce(at.class_id, a.class_id)
+              and c.teacher_id = a.teacher_id
+              and c.status = 'active'
+          )
+        )
       group by a.id, cs.name, at.status, at.due_at, at.submitted_at, sub.id, sub.status, sub.submitted_at, sub.reviewed_at, sub.teacher_comment, tf.comment
       order by coalesce(at.due_at, a.due_at, a.created_at) asc
     `,

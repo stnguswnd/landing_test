@@ -8,8 +8,6 @@ export const runtime = "nodejs";
 type CandidateRow = {
   id: string;
   target_status: string;
-  submitted_at: Date | null;
-  submission_status: string | null;
 };
 
 export async function PATCH(request: Request) {
@@ -26,22 +24,16 @@ export async function PATCH(request: Request) {
       `
         select
           at.id,
-          at.status as target_status,
-          sub.submitted_at,
-          sub.status as submission_status
+          at.status as target_status
         from assignment_targets at
         join assignments a on a.id = at.assignment_id and a.teacher_id = $1
-        left join submissions sub on sub.assignment_id = at.assignment_id and sub.student_id = at.student_id
         where at.id = any($2::text[])
       `,
       [teacherId, targetIds],
     );
 
     const cancellableIds = candidates.rows
-      .filter((row) => {
-        const submitted = Boolean(row.submitted_at || (row.submission_status && row.submission_status !== "not_submitted") || ["submitted", "late"].includes(row.target_status));
-        return !submitted && row.target_status !== "cancelled";
-      })
+      .filter((row) => row.target_status !== "cancelled")
       .map((row) => row.id);
     const skippedTargetIds = candidates.rows.filter((row) => !cancellableIds.includes(row.id)).map((row) => row.id);
 
@@ -61,7 +53,6 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json({
       cancelledCount: cancellableIds.length,
-      skippedSubmittedCount: skippedTargetIds.length,
       skippedTargetIds,
     });
   } catch (error) {

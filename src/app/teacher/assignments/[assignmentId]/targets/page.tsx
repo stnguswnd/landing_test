@@ -125,7 +125,7 @@ export default function AssignmentTargetsPage() {
     try {
       const response = await fetch("/api/teacher/classes", { cache: "no-store" });
       const json: AssignmentClass[] = await response.json();
-      const activeClasses = json.filter((item) => item.status !== "archived");
+      const activeClasses = json.filter((item) => item.status === "active");
       setClasses(activeClasses);
       setAddClassId((current) => current || activeClasses[0]?.id || "");
       setAddClassSubjectId((current) => current || activeClasses[0]?.subjects[0]?.id || "");
@@ -263,8 +263,7 @@ export default function AssignmentTargetsPage() {
         setError(json.error ?? "배정 취소 중 오류가 발생했습니다.");
         return;
       }
-      const skipped = json.skippedSubmittedCount ? ` 제출 완료 ${json.skippedSubmittedCount}명은 취소하지 않았습니다.` : "";
-      setMessage(`배정 ${json.cancelledCount ?? 0}건을 취소했습니다.${skipped}`);
+      setMessage(`배정 ${json.cancelledCount ?? 0}건을 취소했습니다.`);
       setIsCancelModalOpen(false);
       await loadTargets();
     });
@@ -276,7 +275,7 @@ export default function AssignmentTargetsPage() {
         <div>
           <p className="text-sm font-bold text-blue-700">강사 모드</p>
           <h1 className="mt-1 text-3xl font-extrabold tracking-normal text-ink">숙제 배정 관리</h1>
-          <p className="mt-2 text-sm text-slate-500">현재 배정 현황을 확인하고, 학생 추가/마감일 변경/미제출 학생 배정 취소를 처리합니다.</p>
+          <p className="mt-2 text-sm text-slate-500">현재 배정 현황을 확인하고, 학생 추가/마감일 변경/배정 취소를 처리합니다.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button href={`/teacher/assignments/new?assignmentId=${assignmentId}`} variant="secondary">과제 수정</Button>
@@ -398,7 +397,7 @@ export default function AssignmentTargetsPage() {
 
       {isCancelModalOpen && (
         <ConfirmBox title="선택한 학생의 숙제 배정을 취소하시겠습니까?" onClose={() => setIsCancelModalOpen(false)}>
-          <p className="leading-7 text-slate-600">미제출 학생만 취소됩니다. 제출 완료 학생은 제출 기록 보존을 위해 취소되지 않습니다.</p>
+          <p className="leading-7 text-slate-600">선택한 학생의 배정을 취소합니다. 제출 기록이 있는 경우에도 제출 이력은 보존되고 배정만 취소됩니다.</p>
           <div className="mt-5 grid gap-2 sm:grid-cols-2"><Button type="button" variant="secondary" onClick={() => setIsCancelModalOpen(false)}>닫기</Button><Button type="button" variant="danger" onClick={cancelTargets} disabled={isPending}>{isPending ? "취소 중..." : "배정 취소"}</Button></div>
         </ConfirmBox>
       )}

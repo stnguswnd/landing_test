@@ -63,8 +63,10 @@ export async function GET(_request: Request, { params }: Params) {
       join assignments a on a.id = at.assignment_id and a.teacher_id = $2
       left join submissions sub on sub.assignment_id = a.id and sub.student_id = at.student_id
       left join teacher_feedback tf on tf.submission_id = sub.id
-      left join classes c on c.id = at.class_id and c.teacher_id = a.teacher_id
+      left join classes c on c.id = coalesce(at.class_id, a.class_id) and c.teacher_id = a.teacher_id and c.status = 'active'
       where at.student_id = $1
+        and at.status <> 'cancelled'
+        and (coalesce(at.class_id, a.class_id) is null or c.id is not null)
       group by at.assignment_id, at.student_id, at.submitted_at, at.due_at, a.due_at, a.created_at, a.title, a.assignment_type, c.name, sub.id, sub.status, at.reviewed, tf.id, tf.score
       order by date desc, a.title
     `,

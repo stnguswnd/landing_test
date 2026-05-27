@@ -116,7 +116,7 @@ export default function AssignmentsPage() {
     loadAssignments();
     fetch("/api/teacher/classes", { cache: "no-store" })
       .then((response) => response.json())
-      .then((data: AssignmentClass[]) => setClasses(data.filter((item) => item.status !== "archived")))
+      .then((data: AssignmentClass[]) => setClasses(data.filter((item) => item.status === "active")))
       .catch(() => setClasses([]));
   }, []);
 
