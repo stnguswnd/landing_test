@@ -18,7 +18,7 @@ export function TeacherLayout({ children, title }: { children: ReactNode; title:
       <div className="mx-auto flex max-w-[1600px] flex-col md:flex-row">
         <aside className="border-b border-line bg-white p-4 md:sticky md:top-0 md:h-screen md:w-64 md:shrink-0 md:border-b-0 md:border-r">
           <Link href="/teacher/dashboard" className="block text-lg font-bold">
-            Janetimes Studio
+            janetimes Studio
           </Link>
           <nav className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-1">
             {nav.map(([label, href]) => (
