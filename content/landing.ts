@@ -77,7 +77,7 @@ export const programs = [
     target: "초등 고학년 기본반",
     frequency: "주 3회",
     price: "월 20만원 / 30만원",
-    duration: "1회(1 time) 50분",
+    duration: "1회(1 time) 90분",
     summary: "중등 진학 전에 필요한 기반을 탄탄하게 만드는 집중 과정",
     details:
       "중등 영어로 넘어가기 전 필요한 문법, 어휘, 독해 기초를 정리하고 영어 문장 확장 과정으로 자연스럽게 이어집니다.",
@@ -87,7 +87,7 @@ export const programs = [
     target: "심화 학습 및 시험 대비",
     frequency: "주 1~3회",
     price: "월 20만원 / 30만원",
-    duration: "1회(1 time) 50분",
+    duration: "1회(1 time) 90분",
     summary: "영어 5대 영역을 고르게 다지며 문장 구성과 독해를 강화하는 과정",
     details:
       "읽기, 쓰기, 말하기, 독해, 어휘와 문법을 통합해 영어 문장 감각을 키우고 시험형 학습까지 폭넓게 연결합니다.",
@@ -127,7 +127,7 @@ export const programs = [
     target: "리딩 심화",
     frequency: "월 2회",
     price: "월 10만원",
-    duration: "Times For Kid / Jr. Herald",
+    duration: "Kids Times / TIME for Kids / Junior Times / NE Times Junior",
     summary: "시사와 리딩을 함께 다루며 배경지식과 독해력을 넓히는 과정",
     details:
       "리딩 지문을 단순 해석으로 끝내지 않고 배경지식과 표현까지 연결하는 심화 읽기 수업입니다.",
