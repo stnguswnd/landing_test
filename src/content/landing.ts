@@ -197,7 +197,7 @@ export const contact = {
   label: "상담 문의",
   title: "상담 & 커리큘럼 안내",
   description: "",
-  name: "JANE",
+  name: "재인타임즈",
   phone: "010-2760-1568",
   bank: "국민은행 216701-04-033600 예금주 곽재인",
   kakaoLabel: "카카오 문의",
