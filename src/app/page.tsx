@@ -11,9 +11,12 @@ import { Footer } from "@/components/layout/footer";
 import { MobileStickyCta } from "@/components/layout/mobile-sticky-cta";
 import { SectionNav } from "@/components/layout/section-nav";
 import { contact } from "@/content/landing";
-import { siteConfig } from "@/lib/seo";
+import { absoluteUrl, siteConfig } from "@/lib/seo";
+
+const ogImageUrl = absoluteUrl(siteConfig.ogImage);
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteConfig.url),
   title: "인천 영어학원 · 영종도 초등 영어 · 재인타임즈",
   description:
     "인천 영종도에서 초등 영어를 중심으로 문해력, 듣기, 쓰기, 말하기, 독해, 어휘, 문법까지 체계적으로 연결하는 Janetimes English 영어 프로그램을 소개합니다.",
@@ -37,13 +40,15 @@ export const metadata: Metadata = {
     title: "인천 영어학원 · 영종도 초등 영어 · 재인타임즈",
     description:
       "인천 영종도에서 초등 영어를 중심으로 문해력, 듣기, 쓰기, 말하기, 독해, 어휘, 문법까지 체계적으로 연결하는 Janetimes English 영어 프로그램을 소개합니다.",
-    url: "/",
+    url: siteConfig.url,
     siteName: siteConfig.name,
     locale: siteConfig.locale,
     type: "website",
     images: [
       {
-        url: siteConfig.ogImage,
+        url: ogImageUrl,
+        width: 1200,
+        height: 630,
         alt: "Janetimes English 대표 이미지",
       },
     ],
@@ -53,7 +58,7 @@ export const metadata: Metadata = {
     title: "인천 영어학원 · 영종도 초등 영어 · 재인타임즈",
     description:
       "인천 영종도에서 초등 영어를 중심으로 문해력, 듣기, 쓰기, 말하기, 독해, 어휘, 문법까지 체계적으로 연결하는 Janetimes English 영어 프로그램을 소개합니다.",
-    images: [siteConfig.ogImage],
+    images: [ogImageUrl],
   },
 };
 
@@ -66,7 +71,7 @@ export default function HomePage() {
     description: siteConfig.description,
     telephone: contact.phone,
     url: siteConfig.url,
-    image: `${siteConfig.url}${siteConfig.ogImage}`,
+    image: ogImageUrl,
     areaServed: ["인천", "영종도"],
   };
 

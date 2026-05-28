@@ -7,20 +7,15 @@ export type SectionId =
   | "contact";
 
 function resolveSiteUrl() {
-  const envUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    process.env.SITE_URL ??
-    process.env.VERCEL_PROJECT_PRODUCTION_URL ??
-    process.env.VERCEL_URL;
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
 
-  if (!envUrl) {
-    return "https://janetimes.com";
-  }
+  return siteUrl.replace(/\/$/, "");
+}
 
-  const normalizedUrl = envUrl.startsWith("http")
-    ? envUrl
-    : `https://${envUrl}`;
-  return normalizedUrl.replace(/\/$/, "");
+export function absoluteUrl(path: string) {
+  return new URL(path, `${siteConfig.url}/`).toString();
 }
 
 export const siteConfig = {
@@ -29,7 +24,7 @@ export const siteConfig = {
   description:
     "인천 영종도에서 초등 영어를 중심으로 문해력, 듣기, 쓰기, 말하기, 독해, 어휘, 문법까지 연결하는 2년 커리큘럼의 Janetimes English 랜딩 페이지입니다.",
   url: resolveSiteUrl(),
-  ogImage: "/images/janetimes-hero.jpg",
+  ogImage: "/images/og_tag.jpg",
   phone: "010-2760-1568",
   locale: "ko_KR",
   keywords: [
@@ -39,6 +34,7 @@ export const siteConfig = {
     "영종도 초등 영어",
     "초등 영어",
     "초등 영어 홈스쿨링",
+    "초등 영어 스튜디오",
     "영어 커리큘럼",
     "영어 학원",
     "janetimes english",
