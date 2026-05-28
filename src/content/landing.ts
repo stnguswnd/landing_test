@@ -58,7 +58,7 @@ export const curriculumIntro = {
   title: "미국 현지 학교에 적용되는 공부와 동일한 수준으로 Level Up!",
 
   highlight:
-    "2년 초집중 커리큘럼 : Phonics 5단게 + 영어 듣기, 쓰기, 말하기, 독해, 어휘, 그리고 문법",
+    "2년 초집중 커리큘럼 : Phonics 5단계 + 영어 듣기, 쓰기, 말하기, 독해, 어휘, 그리고 문법",
 };
 
 export const programs = [
@@ -117,14 +117,14 @@ export const programs = [
     target: "글쓰기",
     frequency: "주 1회",
     price: "월 10만원",
-    duration: "라이팅 트레이닝",
+    duration: "영어 글쓰기 훈련",
     summary: "짧은 문장부터 생각을 정리해 쓰는 흐름까지 연결하는 라이팅 수업",
     details:
       "아이 스스로 표현한 문장을 구조화하고 읽기 학습과 연동해 안정적으로 정리하는 수업입니다.",
   },
   {
     name: "신문 읽기반",
-    target: "리딩 심화",
+    target: "읽기 심화",
     frequency: "월 2회",
     price: "월 10만원",
     duration: "Kids Times / TIME for Kids / Junior Times / NE Times Junior",
