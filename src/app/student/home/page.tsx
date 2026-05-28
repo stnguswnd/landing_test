@@ -9,6 +9,8 @@ import { getStudentCalendarEvents, getStudentTestResults, getStudentUpcomingTest
 import { formatTimeRange } from "@/lib/calendarTypes";
 import { assignmentTypeLabel as formatAssignmentTypeLabel } from "@/lib/assignmentTypes";
 import { query } from "@/lib/postgres";
+import { createSupabaseAdminClient } from "@/lib/supabase/server";
+import { storageBuckets } from "@/lib/supabase/storage";
 import { getStudentSession } from "@/server/auth/studentSession";
 
 import { StudentCalendarClient, type StudentCalendarEvent } from "./StudentCalendarClient";
@@ -21,6 +23,8 @@ type AssignmentWithTarget = Awaited<ReturnType<typeof studentAssignmentRepositor
 type StudentProfileRow = {
   name: string;
   class_names: string[];
+  class_logo_urls: Array<string | null>;
+  class_logo_storage_paths: Array<string | null>;
 };
 
 type Notice = {
@@ -93,12 +97,21 @@ function formatDateTime(value?: string | null) {
   return new Intl.DateTimeFormat("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Seoul" }).format(new Date(value));
 }
 
+async function signedLogoUrl(path: string | null) {
+  if (!path) return "";
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase.storage.from(storageBuckets.images).createSignedUrl(path, 60 * 60);
+  return error ? "" : data.signedUrl;
+}
+
 async function getStudentProfile(studentId: string, teacherId: string) {
   const result = await query<StudentProfileRow>(
     `
       select
         s.name,
-        coalesce(array_remove(array_agg(c.name order by c.name), null), array[]::text[]) as class_names
+        coalesce(array_remove(array_agg(c.name order by c.name), null), array[]::text[]) as class_names,
+        coalesce(array_remove(array_agg(c.logo_url order by c.name), null), array[]::text[]) as class_logo_urls,
+        coalesce(array_remove(array_agg(c.logo_storage_path order by c.name), null), array[]::text[]) as class_logo_storage_paths
       from students s
       left join class_memberships cm on cm.student_id = s.id
       left join classes c on c.id = cm.class_id and c.teacher_id = s.teacher_id and c.status = 'active'
@@ -107,7 +120,9 @@ async function getStudentProfile(studentId: string, teacherId: string) {
     `,
     [studentId, teacherId],
   );
-  return result.rows[0] ?? { name: "학생", class_names: [] };
+  const row = result.rows[0] ?? { name: "학생", class_names: [], class_logo_urls: [], class_logo_storage_paths: [] };
+  const firstLogoUrl = (await signedLogoUrl(row.class_logo_storage_paths[0] ?? null)) || row.class_logo_urls[0] || "";
+  return { ...row, firstLogoUrl };
 }
 
 export default async function StudentHomePage() {
@@ -129,7 +144,7 @@ export default async function StudentHomePage() {
   return (
     <StudentLayout title="학생 홈">
       <div className="grid gap-8">
-        <StudentTeamHeader studentName={profile.name} classNames={profile.class_names} assignments={assignments} upcomingTest={upcomingTests[0]} />
+        <StudentTeamHeader studentName={profile.name} classNames={profile.class_names} classLogoUrl={profile.firstLogoUrl} assignments={assignments} upcomingTest={upcomingTests[0]} />
         <StudentNoticeCarousel notices={notices} />
         <WeeklyHomeworkSection assignments={assignments} />
         <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
@@ -144,11 +159,13 @@ export default async function StudentHomePage() {
 function StudentTeamHeader({
   studentName,
   classNames,
+  classLogoUrl,
   assignments,
   upcomingTest,
 }: {
   studentName: string;
   classNames: string[];
+  classLogoUrl: string;
   assignments: AssignmentWithTarget[];
   upcomingTest?: UpcomingTest;
 }) {
@@ -157,9 +174,10 @@ function StudentTeamHeader({
     <section className="student-hero-panel px-5 py-7 text-white md:px-8 md:py-10">
       <div className="grid gap-8 lg:grid-cols-[1.35fr_0.65fr] lg:items-end">
         <div>
-          <span className="inline-flex w-fit rounded-full bg-white/18 px-4 py-2 text-sm font-bold text-[#dcfce7] ring-1 ring-white/25">
-            {classNames[0] ?? "배정된 반 없음"}
-          </span>
+          <div className="flex items-center gap-3">
+            {classLogoUrl && <img src={classLogoUrl} alt={`${classNames[0] ?? "class"} logo`} className="h-[72px] w-[72px] rounded-md object-cover" />}
+            <span className="inline-flex w-fit rounded-full bg-white/18 px-4 py-2 text-sm font-bold text-[#dcfce7] ring-1 ring-white/25">{classNames[0] ?? "배정된 반 없음"}</span>
+          </div>
           <h1 className="mt-5 max-w-2xl text-[clamp(2.2rem,7vw,4.2rem)] font-bold leading-[1.25] tracking-[-0.04em]">
             {studentName} 학생의 오늘 학습을 확인해요
           </h1>

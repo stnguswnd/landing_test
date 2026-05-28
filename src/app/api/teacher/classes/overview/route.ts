@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { query } from "@/lib/postgres";
+import { createSupabaseAdminClient } from "@/lib/supabase/server";
+import { storageBuckets } from "@/lib/supabase/storage";
 import { requireTeacherSession } from "@/server/teacher/session";
 
 export const runtime = "nodejs";
@@ -8,6 +10,8 @@ export const runtime = "nodejs";
 type Row = {
   class_id: string;
   class_name: string;
+  class_logo_url: string | null;
+  class_logo_storage_path: string | null;
   class_status: "active" | "archived";
   student_id: string | null;
   student_name: string | null;
@@ -42,6 +46,8 @@ type StudentOverview = {
 type ClassOverview = {
   class_id: string;
   class_name: string;
+  class_logo_url: string | null;
+  class_logo_storage_path: string | null;
   class_status: "active" | "archived";
   student_count: number;
   assigned_count: number;
@@ -52,6 +58,13 @@ type ClassOverview = {
   students: StudentOverview[];
 };
 
+async function signedUrl(path: string | null) {
+  if (!path) return "";
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase.storage.from(storageBuckets.images).createSignedUrl(path, 60 * 60);
+  return error ? "" : data.signedUrl;
+}
+
 export async function GET(request: Request) {
   const { teacherId } = await requireTeacherSession();
   const url = new URL(request.url);
@@ -61,6 +74,8 @@ export async function GET(request: Request) {
       select
         c.id as class_id,
         c.name as class_name,
+        c.logo_url as class_logo_url,
+        c.logo_storage_path as class_logo_storage_path,
         c.status as class_status,
         s.id as student_id,
         s.name as student_name,
@@ -117,6 +132,8 @@ export async function GET(request: Request) {
         classItem = {
           class_id: row.class_id,
           class_name: row.class_name,
+          class_logo_url: row.class_logo_url,
+          class_logo_storage_path: row.class_logo_storage_path,
           class_status: row.class_status,
           student_count: 0,
         assigned_count: 0,
@@ -196,5 +213,10 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ classes: Array.from(classes.values()) });
+  return NextResponse.json({
+    classes: await Promise.all(Array.from(classes.values()).map(async (classItem) => ({
+      ...classItem,
+      class_logo_url: (await signedUrl(classItem.class_logo_storage_path)) || classItem.class_logo_url,
+    }))),
+  });
 }

@@ -20,6 +20,8 @@ type HomeworkItem = {
 type ClassOverview = {
   class_id: string;
   class_name: string;
+  class_logo_url: string | null;
+  class_logo_storage_path: string | null;
   class_status: "active" | "archived";
   student_count: number;
   assigned_count: number;
@@ -62,14 +64,10 @@ export function ClassOverviewPage({ status }: { status: "active" | "archived" })
   }, []);
 
   async function createClass(formData: FormData) {
+    formData.set("status", "active");
     const response = await fetch("/api/teacher/classes", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: String(formData.get("name") ?? "").trim(),
-        description: String(formData.get("description") ?? "").trim(),
-        status: "active",
-      }),
+      body: formData,
     });
     const data = await response.json().catch(() => null);
     if (!response.ok) {
@@ -159,6 +157,10 @@ function ClassCreateModal({
             설명
             <Textarea name="description" placeholder="예: 초등 리딩 기초반" />
           </label>
+          <label className="grid gap-2 text-sm font-semibold">
+            반 로고
+            <Input name="logoFile" type="file" accept="image/*" />
+          </label>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={onClose}>취소</Button>
             <Button type="submit">생성</Button>
@@ -200,10 +202,19 @@ function ClassStatusCard({
   return (
     <Card className="min-h-[620px]">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-bold">{classItem.class_name}</h2>
+        <div className="flex min-w-0 items-center gap-3">
+          {classItem.class_logo_url ? (
+            <img src={classItem.class_logo_url} alt={`${classItem.class_name} logo`} className="h-12 w-12 shrink-0 rounded-md object-cover" />
+          ) : (
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-md bg-slate-50 text-base font-extrabold text-slate-400">
+              {classItem.class_name.slice(0, 1)}
+            </div>
+          )}
+          <div className="min-w-0">
+          <h2 className="truncate text-xl font-bold">{classItem.class_name}</h2>
           <p className="mt-1 text-sm font-semibold text-slate-500">학생 {classItem.student_count}명</p>
           {classItem.class_status === "archived" && <Badge tone="gray">비활성</Badge>}
+          </div>
         </div>
         <Button href={`/teacher/classes/${classItem.class_id}`} variant="secondary">
           반 상세보기

@@ -8,8 +8,9 @@ export function StudentLayout({ children, title }: { children: ReactNode; title:
     <div className="student-shell">
       <header className="fixed inset-x-0 top-0 z-[60] border-b border-line bg-white/95 px-4 py-3 backdrop-blur-xl">
         <div className="student-container flex h-[54px] items-center justify-between">
-          <Link href="/student/home" className="text-lg font-extrabold tracking-[-0.03em] text-[#14532d]">
-            janetimes Studio
+          <Link href="/student/home" className="flex min-w-0 items-center gap-3">
+            <img src="/images/color-logo.png" alt="janetimes logo" className="h-10 w-auto shrink-0 object-contain" />
+            <span className="truncate text-lg font-extrabold tracking-[-0.03em] text-[#14532d]">janetimes Studio</span>
           </Link>
           <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/student/home" className="rounded-full px-3 py-2 text-sm font-bold text-[#14532d] hover:bg-[#dcfce7]">

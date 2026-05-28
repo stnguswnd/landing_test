@@ -23,7 +23,7 @@ type Notice = { id: string; title: string; content: string; imageUrl: string | n
 type CalendarEvent = { id: string; eventType: string; title: string; description?: string | null; eventDate: string; startTime?: string | null; endTime?: string | null; status: string };
 type TestRow = { id: string; title: string; subject: string; testDate: string; startTime?: string | null; endTime?: string | null; scope?: string | null; status: string; resultCount: number; passCount: number; nonpassCount: number };
 type TestResultRow = { studentId: string; studentName: string; score: number | null; maxScore: number; result: "PASS" | "NonPASS"; teacherMemo: string; takenAt?: string | null };
-type ClassItem = { name: string; description?: string | null; status?: "active" | "archived" };
+type ClassItem = { name: string; description?: string | null; logo_url?: string | null; logo_storage_path?: string | null; logo_file_name?: string | null; status?: "active" | "archived" };
 type ClassSubject = { id: string; classId: string; name: string; description: string; status: string };
 type DeletePreview = { deleted: boolean; archived: boolean; reason: "no_history" | "has_history" };
 type HomeworkStatusItem = { assignmentId: string; title: string; subject: string; submissionId?: string };
@@ -196,11 +196,7 @@ export default function ClassDetailPage() {
   async function updateClass(formData: FormData) {
     const response = await fetch(`/api/teacher/classes/${classId}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: String(formData.get("name") ?? "").trim(),
-        description: String(formData.get("description") ?? "").trim(),
-      }),
+      body: formData,
     });
     const data = await response.json().catch(() => null);
     if (!response.ok) {
@@ -269,12 +265,21 @@ export default function ClassDetailPage() {
       <div className="grid gap-4">
         <Card>
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div>
+            <div className="flex min-w-0 items-start gap-4">
+              {classItem?.logo_url ? (
+                <img src={classItem.logo_url} alt={`${classItem.name} logo`} className="h-16 w-16 shrink-0 rounded-md object-cover" />
+              ) : (
+                <div className="grid h-16 w-16 shrink-0 place-items-center rounded-md bg-slate-50 text-xl font-extrabold text-slate-400">
+                  {(classItem?.name ?? "").slice(0, 1)}
+                </div>
+              )}
+              <div className="min-w-0">
               <h1 className="text-2xl font-extrabold">{classItem?.name ?? "반 상세"}</h1>
               <p className="mt-2 text-slate-600">{classItem?.description ?? "-"}</p>
               <p className="mt-3 text-sm font-semibold text-slate-500">
                 학생 {students.length}명 · 숙제 {assignments.length}개 · 예정 시험 {tests.filter((test) => test.status === "scheduled").length}개 · 공유 일정 {events.length + tests.length + assignments.filter((assignment) => assignment.dueAt).length}개
               </p>
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button variant="secondary" onClick={() => setIsEditOpen(true)}>반 수정하기</Button>
@@ -388,10 +393,32 @@ function ClassEditModal({
   onClose,
   onSubmit,
 }: {
-  classItem: { name: string; description?: string | null };
+  classItem: { name: string; description?: string | null; logo_url?: string | null; logo_file_name?: string | null };
   onClose: () => void;
   onSubmit: (formData: FormData) => void;
 }) {
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(classItem.logo_url ?? null);
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [objectUrl]);
+
+  function previewLogo(fileList: FileList | null) {
+    const file = fileList?.[0];
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    if (!file) {
+      setObjectUrl(null);
+      setLogoPreviewUrl(classItem.logo_url ?? null);
+      return;
+    }
+    const nextUrl = URL.createObjectURL(file);
+    setObjectUrl(nextUrl);
+    setLogoPreviewUrl(nextUrl);
+  }
+
   return (
     <Modal title="반 정보 수정" onClose={onClose}>
       <form action={onSubmit} className="grid gap-4">
@@ -403,6 +430,17 @@ function ClassEditModal({
           설명
           <Textarea name="description" defaultValue={classItem.description ?? ""} />
         </label>
+        <label className="grid gap-2 text-sm font-semibold">
+          반 로고
+          {logoPreviewUrl && <img src={logoPreviewUrl} alt={`${classItem.name} logo preview`} className="h-20 w-20 rounded-md object-cover" />}
+          <Input name="logoFile" type="file" accept="image/*" onChange={(event) => previewLogo(event.target.files)} />
+        </label>
+        {classItem.logo_url && (
+          <label className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+            <input name="removeLogo" type="checkbox" value="1" className="h-4 w-4 rounded border-line" />
+            로고 삭제
+          </label>
+        )}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onClose}>취소</Button>
           <Button type="submit">저장</Button>
