@@ -128,19 +128,13 @@ export function StudentManagementView({ initialStudents }: { initialStudents: Ma
     setToast("학생 정보가 수정되었습니다.");
   }
 
-  async function inactiveSelectedStudent() {
+  async function deleteSelectedStudent() {
     if (!selectedStudent) return;
     const nextStudents = await studentRepository.deleteStudent(selectedStudent.id, students);
     setStudents(nextStudents);
+    setSelectedStudentId(nextStudents[0]?.id ?? null);
     setIsDeleteConfirmOpen(false);
-    setToast("학생이 비활성화되었습니다.");
-  }
-
-  async function reactivateSelectedStudent() {
-    if (!selectedStudent) return;
-    const nextStudents = await studentRepository.updateStudent(selectedStudent.id, { status: "active" }, students);
-    setStudents(nextStudents);
-    setToast("학생이 재활성화되었습니다.");
+    setToast("학생이 삭제되었습니다.");
   }
 
   async function changePassword(password: string) {
@@ -196,7 +190,6 @@ export function StudentManagementView({ initialStudents }: { initialStudents: Ma
           onStudentPassword={() => setPasswordTarget("student")}
           onParentPassword={() => setPasswordTarget("parent")}
           onDelete={() => setIsDeleteConfirmOpen(true)}
-          onReactivate={reactivateSelectedStudent}
           onUpdate={updateSelectedStudent}
           learningHistory={learningHistory}
           classes={classes}
@@ -213,10 +206,10 @@ export function StudentManagementView({ initialStudents }: { initialStudents: Ma
       )}
       {isDeleteConfirmOpen && (
         <ConfirmModal
-          title="학생 비활성화"
-          message="이 학생을 비활성화할까요? 제출 기록과 과제 이력은 유지됩니다."
+          title="학생 삭제"
+          message="이 학생을 삭제할까요? 학생과 연결된 과제 제출 이력도 함께 삭제됩니다."
           onCancel={() => setIsDeleteConfirmOpen(false)}
-          onConfirm={inactiveSelectedStudent}
+          onConfirm={deleteSelectedStudent}
         />
       )}
     </div>
@@ -279,7 +272,6 @@ function StudentDetailPanel({
   onStudentPassword,
   onParentPassword,
   onDelete,
-  onReactivate,
   onUpdate,
   learningHistory,
   classes,
@@ -291,7 +283,6 @@ function StudentDetailPanel({
   onStudentPassword: () => void;
   onParentPassword: () => void;
   onDelete: () => void;
-  onReactivate: () => void;
   onUpdate: (input: Partial<ManagedStudent>) => void;
   learningHistory: StudentLearningHistory[];
   classes: Class[];
@@ -341,7 +332,6 @@ function StudentDetailPanel({
             onStudentPassword={onStudentPassword}
             onParentPassword={onParentPassword}
             onDelete={onDelete}
-            onReactivate={onReactivate}
             onUpdate={onUpdate}
           />
         )}
@@ -385,7 +375,6 @@ function DetailTab({
   onStudentPassword,
   onParentPassword,
   onDelete,
-  onReactivate,
   onUpdate,
 }: {
   student: ManagedStudent;
@@ -393,7 +382,6 @@ function DetailTab({
   onStudentPassword: () => void;
   onParentPassword: () => void;
   onDelete: () => void;
-  onReactivate: () => void;
   onUpdate: (input: Partial<ManagedStudent>) => void;
 }) {
   const [draft, setDraft] = useState(student);
@@ -459,11 +447,7 @@ function DetailTab({
         </DetailRow>
       </div>
       <div className="grid gap-2 sm:flex sm:justify-end">
-        {student.status === "inactive" ? (
-          <Button onClick={onReactivate}>학생 재활성화</Button>
-        ) : (
-          <Button variant="danger" onClick={onDelete}>학생 비활성화</Button>
-        )}
+        <Button variant="danger" onClick={onDelete}>학생 삭제</Button>
         <Button onClick={() => onUpdate({ ...draft, classIds: selectedClassIds })}>정보 수정</Button>
       </div>
     </div>

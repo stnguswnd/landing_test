@@ -57,8 +57,8 @@ export const studentRepository = {
   },
   async deleteStudent(studentId: string, students: ManagedStudent[]) {
     const response = await fetch(apiUrl(`/api/teacher/students/${studentId}`), { method: "DELETE" });
-    const updated = await readJson<ManagedStudent>(response, "학생 비활성화 중 오류가 발생했습니다.");
-    return students.map((student) => (student.id === studentId ? updated : student));
+    await readJson<{ deleted: true }>(response, "학생 삭제 중 오류가 발생했습니다.");
+    return students.filter((student) => student.id !== studentId);
   },
   async getLearningHistory(studentId: string) {
     const response = await fetch(apiUrl(`/api/teacher/students/${studentId}/history`), { cache: "no-store" });

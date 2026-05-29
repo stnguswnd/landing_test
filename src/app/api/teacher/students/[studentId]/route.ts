@@ -87,6 +87,18 @@ async function validateClassIds(client: { query: typeof postgresPool.query }, te
   return { valid: true, classIds: uniqueClassIds, error: null };
 }
 
+async function deleteIfTableExists(
+  client: { query: typeof postgresPool.query },
+  tableName: string,
+  sql: string,
+  values: unknown[],
+) {
+  const result = await client.query<{ exists: boolean }>("select to_regclass($1) is not null as exists", [`public.${tableName}`]);
+  if (result.rows[0]?.exists) {
+    await client.query(sql, values);
+  }
+}
+
 export async function GET(_request: Request, { params }: Params) {
   const { teacherId } = await requireTeacherSession();
   const { studentId } = await params;
@@ -191,16 +203,63 @@ export async function PATCH(request: Request, { params }: Params) {
 export async function DELETE(_request: Request, { params }: Params) {
   const { teacherId } = await requireTeacherSession();
   const { studentId } = await params;
-  const result = await postgresPool.query(
-    `
-      update students
-      set status = 'inactive', updated_at = now()
-      where id = $1 and teacher_id = $2
-      returning id
-    `,
-    [studentId, teacherId],
-  );
-  if (!result.rows[0]) return NextResponse.json({ error: "학생을 찾을 수 없습니다." }, { status: 404 });
-  const student = await findStudent(teacherId, studentId);
-  return NextResponse.json(student);
+  const client = await postgresPool.connect();
+
+  try {
+    await client.query("begin");
+
+    const student = await client.query<{ id: string }>(
+      "select id from students where id = $1 and teacher_id = $2 for update",
+      [studentId, teacherId],
+    );
+    if (!student.rows[0]) {
+      await client.query("rollback");
+      return NextResponse.json({ error: "학생을 찾을 수 없습니다." }, { status: 404 });
+    }
+
+    await deleteIfTableExists(
+      client,
+      "submission_vocabulary_items",
+      `
+        delete from submission_vocabulary_items
+        where submission_id in (select id from submissions where student_id = $1)
+      `,
+      [studentId],
+    );
+    await deleteIfTableExists(
+      client,
+      "teacher_feedback",
+      `
+        delete from teacher_feedback
+        where submission_id in (select id from submissions where student_id = $1)
+      `,
+      [studentId],
+    );
+    await deleteIfTableExists(
+      client,
+      "submission_items",
+      `
+        delete from submission_items
+        where submission_id in (select id from submissions where student_id = $1)
+      `,
+      [studentId],
+    );
+    await deleteIfTableExists(client, "submissions", "delete from submissions where student_id = $1", [studentId]);
+    await deleteIfTableExists(client, "assignment_targets", "delete from assignment_targets where student_id = $1", [studentId]);
+    await deleteIfTableExists(client, "test_results", "delete from test_results where student_id = $1 and teacher_id = $2", [studentId, teacherId]);
+    await deleteIfTableExists(client, "notice_targets", "delete from notice_targets where student_id = $1", [studentId]);
+    await deleteIfTableExists(client, "class_memberships", "delete from class_memberships where student_id = $1", [studentId]);
+    await deleteIfTableExists(client, "app_users", "update app_users set linked_student_id = null where linked_student_id = $1", [studentId]);
+
+    await client.query("delete from students where id = $1 and teacher_id = $2", [studentId, teacherId]);
+    await client.query("commit");
+
+    return NextResponse.json({ deleted: true });
+  } catch (error) {
+    await client.query("rollback");
+    console.error(error);
+    return NextResponse.json({ error: "학생 삭제 중 오류가 발생했습니다." }, { status: 500 });
+  } finally {
+    client.release();
+  }
 }
