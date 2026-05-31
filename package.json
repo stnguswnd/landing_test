@@ -11,6 +11,10 @@
     "create:teacher": "node scripts/create-teacher.mjs",
     "seed:auth": "node scripts/seed-auth.mjs",
     "seed:calendar-demo": "node scripts/seed-calendar-notice-demo.mjs",
+    "apply:photo-submission": "node scripts/apply-photo-submission-assignments.mjs",
+    "apply:assignment-parts": "node scripts/apply-assignment-parts.mjs",
+    "apply:assignment-drafts": "node scripts/apply-student-assignment-drafts.mjs",
+    "apply:ai-feedback-attempts": "node scripts/apply-ai-feedback-attempts.mjs",
     "lint": "next lint"
   },
   "dependencies": {

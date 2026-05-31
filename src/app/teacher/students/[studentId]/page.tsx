@@ -7,6 +7,7 @@ import { TeacherLayout } from "@/components/layout/TeacherLayout";
 import { query } from "@/lib/postgres";
 import { assignmentTypeLabel as formatAssignmentTypeLabel } from "@/lib/assignmentTypes";
 import { getTeacherSession } from "@/server/teacher/session";
+import { SubmissionDeleteButton } from "./SubmissionDeleteButton";
 import type {
   ManagedStudent,
   StudentLearningHistory,
@@ -38,6 +39,8 @@ type HistoryRow = {
   score: number | null;
   review_status: StudentLearningHistory["reviewStatus"];
   detail_href: string | null;
+  submission_id: string | null;
+  assignment_target_id: string;
 };
 
 function toDate(value: string | Date) {
@@ -80,6 +83,8 @@ function mapHistory(row: HistoryRow): StudentLearningHistory {
     score: row.score,
     reviewStatus: row.review_status,
     detailHref: row.detail_href ?? undefined,
+    submissionId: row.submission_id ?? undefined,
+    assignmentTargetId: row.assignment_target_id,
   };
 }
 
@@ -119,6 +124,7 @@ async function getLearningHistory(teacherId: string, studentId: string) {
     `
       select
         concat('history-', at.assignment_id, '-', at.student_id) as id,
+        at.id as assignment_target_id,
         at.student_id,
         coalesce(at.submitted_at, at.due_at, a.due_at, a.created_at)::date as date,
         a.title as assignment_title,
@@ -135,7 +141,8 @@ async function getLearningHistory(teacherId: string, studentId: string) {
           when sub.id is not null then 'pending'
           else 'none'
         end as review_status,
-        case when sub.id is not null then concat('/teacher/submissions/', sub.id) else null end as detail_href
+        case when sub.id is not null then concat('/teacher/submissions/', sub.id) else null end as detail_href,
+        sub.id as submission_id
       from assignment_targets at
       join assignments a on a.id = at.assignment_id and a.teacher_id = $2
       left join submissions sub on sub.assignment_id = a.id and sub.student_id = at.student_id
@@ -146,6 +153,7 @@ async function getLearningHistory(teacherId: string, studentId: string) {
         and (coalesce(at.class_id, a.class_id) is null or c.id is not null)
       group by
         at.assignment_id,
+        at.id,
         at.student_id,
         at.submitted_at,
         at.due_at,
@@ -156,6 +164,7 @@ async function getLearningHistory(teacherId: string, studentId: string) {
         c.name,
         sub.id,
         sub.status,
+        sub.id,
         at.reviewed,
         tf.id,
         tf.score
@@ -250,7 +259,7 @@ export default async function StudentLearningHistoryPage({
               </p>
             ) : (
               history.map((item) => (
-                <div key={item.id} className="grid gap-3 rounded-md border border-line p-4 lg:grid-cols-[120px_1fr_170px_140px_120px_140px] lg:items-center">
+                <div key={item.id} className="grid gap-3 rounded-md border border-line p-4 lg:grid-cols-[120px_1fr_170px_140px_120px_140px_120px] lg:items-center">
                   <p className="text-sm font-bold text-slate-500">{item.date}</p>
                   <div className="min-w-0">
                     <p className="truncate font-bold">{item.assignmentTitle}</p>
@@ -266,6 +275,11 @@ export default async function StudentLearningHistoryPage({
                   ) : (
                     <Button disabled variant="secondary">피드백 없음</Button>
                   )}
+                  <SubmissionDeleteButton
+                    studentId={student.id}
+                    submissionId={item.submissionId}
+                    assignmentTitle={item.assignmentTitle}
+                  />
                 </div>
               ))
             )}

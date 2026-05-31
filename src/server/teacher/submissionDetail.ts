@@ -20,7 +20,12 @@ type SubmissionRow = {
   assignment_id: string;
   assignment_title: string;
   assignment_type: string;
+  submission_item_id: string | null;
   assignment_item_id: string | null;
+  assignment_part_id: string | null;
+  part_type: string | null;
+  part_title: string | null;
+  part_script_text: string | null;
   item_title: string | null;
   passage_text: string | null;
   writing_mode: string | null;
@@ -39,6 +44,25 @@ type SubmissionRow = {
   ai_feedback: string | null;
   ai_grammar_notes: string | null;
   ai_expression_notes: string | null;
+  attachments: AttachmentRow[] | null;
+};
+
+type AttachmentRow = {
+  id: string;
+  submission_item_id: string;
+  submission_id: string;
+  assignment_item_id: string | null;
+  attachment_type: "image" | "audio" | "video" | "file";
+  storage_bucket: string;
+  storage_path: string;
+  file_url: string | null;
+  file_name: string | null;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  duration_sec: number | null;
+  width_px: number | null;
+  height_px: number | null;
+  order_index: number;
 };
 
 type VocabularyRow = {
@@ -71,6 +95,8 @@ export type TeacherSubmissionDetail = {
   };
   items: Array<{
     assignmentItemId: string;
+    assignmentPartId?: string;
+    partType?: string;
     title?: string;
     passageText?: string;
     audioUrl?: string;
@@ -87,6 +113,23 @@ export type TeacherSubmissionDetail = {
     aiFeedback?: string;
     aiGrammarNotes?: string;
     aiExpressionNotes?: string;
+    attachments?: Array<{
+      id: string;
+      submissionItemId: string;
+      submissionId: string;
+      assignmentItemId?: string;
+      attachmentType: "image" | "audio" | "video" | "file";
+      storageBucket: string;
+      storagePath: string;
+      fileUrl?: string;
+      fileName?: string;
+      mimeType?: string;
+      fileSizeBytes?: number;
+      durationSec?: number;
+      widthPx?: number;
+      heightPx?: number;
+      orderIndex: number;
+    }>;
   }>;
   vocabularyItems: Array<{
     id: string;
@@ -116,6 +159,26 @@ async function signedUrl(bucket: string, path: string | null) {
   return error ? "" : data.signedUrl;
 }
 
+async function mapAttachment(row: AttachmentRow) {
+  return {
+    id: row.id,
+    submissionItemId: row.submission_item_id,
+    submissionId: row.submission_id,
+    assignmentItemId: row.assignment_item_id ?? undefined,
+    attachmentType: row.attachment_type,
+    storageBucket: row.storage_bucket,
+    storagePath: row.storage_path,
+    fileUrl: ((await signedUrl(row.storage_bucket, row.storage_path)) || row.file_url) ?? undefined,
+    fileName: row.file_name ?? undefined,
+    mimeType: row.mime_type ?? undefined,
+    fileSizeBytes: row.file_size_bytes ?? undefined,
+    durationSec: row.duration_sec ?? undefined,
+    widthPx: row.width_px ?? undefined,
+    heightPx: row.height_px ?? undefined,
+    orderIndex: row.order_index,
+  };
+}
+
 export async function getTeacherSubmissionDetail(
   teacherId: string,
   submissionId: string,
@@ -137,7 +200,12 @@ export async function getTeacherSubmissionDetail(
         a.id as assignment_id,
         a.title as assignment_title,
         a.assignment_type,
+        si.id as submission_item_id,
         ai.id as assignment_item_id,
+        ap.id as assignment_part_id,
+        ap.part_type,
+        ap.title as part_title,
+        ap.script_text as part_script_text,
         ai.title as item_title,
         ai.passage_text,
         ai.writing_mode,
@@ -155,7 +223,34 @@ export async function getTeacherSubmissionDetail(
         si.ai_corrected_text,
         si.ai_feedback,
         si.ai_grammar_notes,
-        si.ai_expression_notes
+        si.ai_expression_notes,
+        coalesce(
+          (
+            select json_agg(
+              json_build_object(
+                'id', sia.id,
+                'submission_item_id', sia.submission_item_id,
+                'submission_id', sia.submission_id,
+                'assignment_item_id', sia.assignment_item_id,
+                'attachment_type', sia.attachment_type,
+                'storage_bucket', sia.storage_bucket,
+                'storage_path', sia.storage_path,
+                'file_url', sia.file_url,
+                'file_name', sia.file_name,
+                'mime_type', sia.mime_type,
+                'file_size_bytes', sia.file_size_bytes,
+                'duration_sec', sia.duration_sec,
+                'width_px', sia.width_px,
+                'height_px', sia.height_px,
+                'order_index', sia.order_index
+              )
+              order by sia.order_index
+            )
+            from submission_item_attachments sia
+            where sia.submission_item_id = si.id
+          ),
+          '[]'::json
+        ) as attachments
       from submissions sub
       join students s on s.id = sub.student_id
       join assignments a on a.id = sub.assignment_id and a.teacher_id = $2
@@ -164,12 +259,13 @@ export async function getTeacherSubmissionDetail(
         or (at.assignment_id = sub.assignment_id and at.student_id = sub.student_id)
       left join submission_items si on si.submission_id = sub.id
       left join assignment_items ai on ai.id = si.assignment_item_id
+      left join assignment_parts ap on ap.id = si.assignment_part_id
       left join teacher_feedback tf on tf.submission_id = sub.id and tf.teacher_id = a.teacher_id
       left join class_memberships cm on cm.student_id = s.id
       left join classes c on c.id = cm.class_id and c.teacher_id = a.teacher_id and c.status = 'active'
       where sub.id = $1
-      group by sub.id, at.due_at, a.due_at, tf.comment, s.id, a.id, ai.id, si.id
-      order by ai.order_index
+      group by sub.id, at.due_at, a.due_at, tf.comment, s.id, a.id, ai.id, ap.id, si.id
+      order by coalesce(ap.order_index, ai.order_index)
     `,
     [submissionId, teacherId],
   );
@@ -201,7 +297,7 @@ export async function getTeacherSubmissionDetail(
     [submissionId, first.assignment_id],
   );
 
-  const rowsWithItems = result.rows.filter((row) => row.assignment_item_id);
+  const rowsWithItems = result.rows.filter((row) => row.submission_item_id);
 
   return {
     submissionId: first.submission_id,
@@ -218,9 +314,11 @@ export async function getTeacherSubmissionDetail(
       assignmentType: normalizeAssignmentType(first.assignment_type),
     },
     items: await Promise.all(rowsWithItems.map(async (row) => ({
-      assignmentItemId: row.assignment_item_id as string,
-      title: row.item_title ?? undefined,
-      passageText: row.passage_text ?? undefined,
+      assignmentItemId: (row.assignment_item_id ?? row.assignment_part_id ?? row.submission_item_id) as string,
+      assignmentPartId: row.assignment_part_id ?? undefined,
+      partType: row.part_type ?? undefined,
+      title: row.item_title ?? row.part_title ?? undefined,
+      passageText: row.passage_text ?? row.part_script_text ?? undefined,
       writingMode: row.writing_mode ?? undefined,
       writingUnit: row.writing_unit ?? undefined,
       writingUnitCount: row.writing_unit_count ?? undefined,
@@ -235,6 +333,7 @@ export async function getTeacherSubmissionDetail(
       aiFeedback: row.ai_feedback ?? undefined,
       aiGrammarNotes: row.ai_grammar_notes ?? undefined,
       aiExpressionNotes: row.ai_expression_notes ?? undefined,
+      attachments: await Promise.all((row.attachments ?? []).map(mapAttachment)),
     }))),
     vocabularyItems: vocabularyResult.rows.map((row) => ({
       id: row.id,

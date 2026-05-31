@@ -77,6 +77,8 @@ export async function POST(request: Request) {
           assignment_target_id = excluded.assignment_target_id,
           status = excluded.status,
           submitted_at = now(),
+          reviewed_at = null,
+          teacher_comment = null,
           updated_at = now()
       `,
       [submissionId, assignmentId, session.studentId, row.target_id, submissionStatus],

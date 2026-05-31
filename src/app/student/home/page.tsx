@@ -62,6 +62,14 @@ function assignmentTypeLabel(type: string) {
   return formatAssignmentTypeLabel(type);
 }
 
+function assignmentTypeTags(assignment: AssignmentWithTarget) {
+  const activeParts = (assignment.parts ?? []).filter((part) => part.status === "active");
+  if (activeParts.length === 0) return [assignmentTypeLabel(assignment.assignmentType)];
+
+  const labels = activeParts.map((part) => assignmentTypeLabel(part.partType));
+  return Array.from(new Set(labels));
+}
+
 function subjectForAssignment(assignment: AssignmentWithTarget) {
   return assignment.assignmentSubject ?? "Phonics";
 }
@@ -235,8 +243,9 @@ function HomeworkSubjectCard({ assignment }: { assignment: AssignmentWithTarget 
   const item = assignment.items[0];
   const needsResubmit = assignment.targetStatus === "returned";
   const hasSubmitted = Boolean(assignment.submittedAt);
+  const hasDraft = Boolean(assignment.draft) && !hasSubmitted && !needsResubmit;
   const href = hasSubmitted && !needsResubmit ? `/student/assignments/${assignment.id}/complete` : `/student/assignments/${assignment.id}`;
-  const buttonLabel = needsResubmit ? "다시 제출하기" : hasSubmitted ? "제출 내용 보기" : "숙제하기";
+  const buttonLabel = needsResubmit ? "다시 제출하기" : hasSubmitted ? "제출 내용 보기" : hasDraft ? "숙제 이어하기" : "숙제하기";
   const passageTitle = item?.title && item.title !== assignment.title ? item.title : "";
 
   return (
@@ -244,7 +253,9 @@ function HomeworkSubjectCard({ assignment }: { assignment: AssignmentWithTarget 
       <div className="flex flex-col items-start gap-2 sm:flex-row sm:justify-between sm:gap-3">
         <div className="flex flex-wrap gap-2">
           <Badge tone="blue">{subjectForAssignment(assignment)}</Badge>
-          <Badge>{assignmentTypeLabel(assignment.assignmentType)}</Badge>
+          {assignmentTypeTags(assignment).map((label) => (
+            <Badge key={label}>{label}</Badge>
+          ))}
         </div>
         {assignment.dueAt && <Badge tone="yellow">마감 {formatDateTime(assignment.dueAt)}</Badge>}
       </div>

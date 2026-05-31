@@ -168,6 +168,14 @@ export function StudentManagementView({ initialStudents }: { initialStudents: Ma
     setToast("학생이 등록되었습니다.");
   }
 
+  async function deleteLearningHistoryItem(item: StudentLearningHistory) {
+    if (!selectedStudent || !item.submissionId) return;
+    await studentRepository.deleteSubmissionHistory(selectedStudent.id, item.submissionId);
+    const nextHistory = await studentRepository.getLearningHistory(selectedStudent.id);
+    setLearningHistory(nextHistory);
+    setToast("제출 내역이 삭제되었습니다.");
+  }
+
   return (
     <div className="relative">
       {toast && <div className="fixed right-4 top-4 z-50 rounded-md bg-ink px-4 py-3 text-sm font-semibold text-white shadow-soft">{toast}</div>}
@@ -192,6 +200,7 @@ export function StudentManagementView({ initialStudents }: { initialStudents: Ma
           onDelete={() => setIsDeleteConfirmOpen(true)}
           onUpdate={updateSelectedStudent}
           learningHistory={learningHistory}
+          onDeleteLearningHistory={deleteLearningHistoryItem}
           classes={classes}
         />
       </div>
@@ -274,6 +283,7 @@ function StudentDetailPanel({
   onDelete,
   onUpdate,
   learningHistory,
+  onDeleteLearningHistory,
   classes,
 }: {
   student: ManagedStudent | null;
@@ -285,6 +295,7 @@ function StudentDetailPanel({
   onDelete: () => void;
   onUpdate: (input: Partial<ManagedStudent>) => void;
   learningHistory: StudentLearningHistory[];
+  onDeleteLearningHistory: (item: StudentLearningHistory) => void | Promise<void>;
   classes: Class[];
 }) {
   if (!student) {
@@ -335,7 +346,7 @@ function StudentDetailPanel({
             onUpdate={onUpdate}
           />
         )}
-        {activeTab === "learning" && <LearningTab history={learningHistory} />}
+        {activeTab === "learning" && <LearningTab history={learningHistory} onDelete={onDeleteLearningHistory} />}
       </div>
     </section>
   );
@@ -511,29 +522,68 @@ function Avatar({ avatarKey, selected }: { avatarKey: string; selected?: boolean
   );
 }
 
-function LearningTab({ history }: { history: StudentLearningHistory[] }) {
+function LearningTab({ history, onDelete }: { history: StudentLearningHistory[]; onDelete: (item: StudentLearningHistory) => void | Promise<void> }) {
+  const [deleteTarget, setDeleteTarget] = useState<StudentLearningHistory | null>(null);
+  const [deleteError, setDeleteError] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  async function confirmDelete() {
+    if (!deleteTarget?.submissionId) return;
+    setIsDeleting(true);
+    setDeleteError("");
+    try {
+      await onDelete(deleteTarget);
+      setDeleteTarget(null);
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "제출 내역 삭제 중 오류가 발생했습니다.");
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   if (history.length === 0) return <EmptyState>아직 학습 이력이 없습니다.</EmptyState>;
   return (
-    <Table headers={["날짜", "숙제명", "반", "유형", "제출 상태", "피드백 상태", "상세 보기"]}>
-      {history.map((item) => (
-        <tr key={item.id} className="border-t border-line">
-          <td className="py-3">{item.date}</td>
-          <td className="font-semibold">{item.assignmentTitle}</td>
-          <td>{item.className ?? "-"}</td>
-          <td>{assignmentTypeLabel(item.assignmentType)}</td>
-          <td><Badge tone={item.submitStatus === "submitted" ? "green" : item.submitStatus === "late" ? "yellow" : "red"}>{submitStatusLabel(item.submitStatus)}</Badge></td>
-          <td>{reviewStatusLabel(item.reviewStatus)}</td>
-          <td>{item.detailHref ? <Button href={item.detailHref} variant="secondary">상세</Button> : <Button disabled variant="secondary">상세</Button>}</td>
-        </tr>
-      ))}
-    </Table>
+    <>
+      <Table headers={["날짜", "숙제명", "반", "유형", "제출 상태", "피드백 상태", "상세 보기", "삭제"]}>
+        {history.map((item) => (
+          <tr key={item.id} className="border-t border-line">
+            <td className="py-3">{item.date}</td>
+            <td className="font-semibold">{item.assignmentTitle}</td>
+            <td>{item.className ?? "-"}</td>
+            <td>{assignmentTypeLabel(item.assignmentType)}</td>
+            <td><Badge tone={item.submitStatus === "submitted" ? "green" : item.submitStatus === "late" ? "yellow" : "red"}>{submitStatusLabel(item.submitStatus)}</Badge></td>
+            <td>{reviewStatusLabel(item.reviewStatus)}</td>
+            <td>{item.detailHref ? <Button href={item.detailHref} variant="secondary">상세</Button> : <Button disabled variant="secondary">상세</Button>}</td>
+            <td>
+              <Button type="button" variant="danger" disabled={!item.submissionId} onClick={() => setDeleteTarget(item)}>
+                삭제하기
+              </Button>
+            </td>
+          </tr>
+        ))}
+      </Table>
+      {deleteTarget && (
+        <Modal title="제출 내역 삭제" onClose={() => setDeleteTarget(null)}>
+          <p className="text-sm leading-6 text-slate-700">
+            {deleteTarget.assignmentTitle} 제출 내역만 삭제할까요? 배정 이력은 남고 학생에게는 다시 미제출 과제로 보입니다.
+          </p>
+          {deleteError && <p className="mt-3 text-sm font-semibold text-danger">{deleteError}</p>}
+          <div className="mt-5 flex justify-end gap-2">
+            <Button type="button" variant="secondary" disabled={isDeleting} onClick={() => setDeleteTarget(null)}>취소</Button>
+            <Button type="button" variant="danger" disabled={isDeleting} onClick={confirmDelete}>
+              {isDeleting ? "삭제 중..." : "삭제하기"}
+            </Button>
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }
 
 function Table({ headers, children }: { headers: string[]; children: React.ReactNode }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[760px] text-left text-sm">
+      <table className="w-full min-w-[920px] text-left text-sm">
         <thead className="text-slate-500">
           <tr>{headers.map((header) => <th key={header} className="py-2 font-bold">{header}</th>)}</tr>
         </thead>

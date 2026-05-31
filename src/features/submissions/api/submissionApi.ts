@@ -41,6 +41,40 @@ export async function completeListeningAssignment(assignmentId: string) {
   return data as { submissionId: string; submittedAt: string; status: string };
 }
 
+export type PhotoSubmissionInput = {
+  assignmentId: string;
+  assignmentItemId: string;
+  files: File[];
+  keptAttachmentIds?: string[];
+};
+
+export async function submitPhotoAssignment(input: PhotoSubmissionInput) {
+  const formData = new FormData();
+  formData.set("assignmentId", input.assignmentId);
+  formData.set("assignmentItemId", input.assignmentItemId);
+  formData.set("keptAttachmentIds", JSON.stringify(input.keptAttachmentIds ?? []));
+  for (const file of input.files) {
+    formData.append("files", file, file.name);
+  }
+
+  const response = await fetch("/api/student/submissions/photo", {
+    method: "POST",
+    body: formData,
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error ?? "사진 제출 중 오류가 발생했습니다.");
+  }
+
+  return data as {
+    submissionId: string;
+    submittedAt: string;
+    status: string;
+    attachments: Array<{ storagePath: string; url: string; fileName: string }>;
+  };
+}
+
 export type WritingFeedbackInput = {
   assignmentId: string;
   assignmentItemId: string;

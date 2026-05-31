@@ -18,4 +18,23 @@ export type SubmissionItem = {
   recordingMimeType?: string;
   recordingDurationSec?: number;
   fileSizeBytes?: number;
+  attachments?: SubmissionItemAttachment[];
+};
+
+export type SubmissionItemAttachment = {
+  id: string;
+  submissionItemId: string;
+  submissionId: string;
+  assignmentItemId?: string;
+  attachmentType: "image" | "audio" | "video" | "file";
+  storageBucket: string;
+  storagePath: string;
+  fileUrl?: string;
+  fileName?: string;
+  mimeType?: string;
+  fileSizeBytes?: number;
+  durationSec?: number;
+  widthPx?: number;
+  heightPx?: number;
+  orderIndex: number;
 };

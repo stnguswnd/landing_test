@@ -27,6 +27,7 @@ type AssignmentRow = {
   title: string;
   description: string;
   assignmentType: string;
+  assignmentTypes?: string[];
   assignmentSubject: string;
   assignmentSubjects?: string[];
   status: "published" | "draft" | "closed" | "archived" | string;
@@ -60,6 +61,12 @@ type TargetSelection = {
 };
 
 function typeLabel(type: string) {
+  if (type === "recording") return "RL 녹음";
+  if (type === "photo_submission") return "사진 제출";
+  if (type === "vocabulary_example") return "단어장 예문";
+  if (type === "vocabulary_recording") return "단어장 녹음";
+  if (type === "writing") return "라이팅";
+  if (type === "listening") return "리스닝";
   return formatAssignmentTypeLabel(type);
 }
 
@@ -236,6 +243,7 @@ export default function AssignmentsPage() {
       <div className="grid gap-4">
         {filteredRows.map((row) => {
           const selected = selectedIds.includes(row.id);
+          const assignmentTypes = row.assignmentTypes?.length ? row.assignmentTypes : [row.assignmentType];
           return (
             <Card key={row.id} className={cn("p-0 transition", selected && "border-action bg-blue-50/40 ring-1 ring-action")}>
               <div className="p-5">
@@ -255,7 +263,9 @@ export default function AssignmentsPage() {
                       <p className="mt-1 text-sm text-slate-600">{row.description || "설명이 없습니다."}</p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <Badge tone={row.targetCount > 0 ? "green" : "gray"}>{row.targetCount > 0 ? "배정됨" : "미배정"}</Badge>
-                        <Badge>{typeLabel(row.assignmentType)}</Badge>
+                        {assignmentTypes.map((type) => (
+                          <Badge key={`${row.id}-${type}`}>{typeLabel(type)}</Badge>
+                        ))}
                       </div>
                     </div>
                   </div>

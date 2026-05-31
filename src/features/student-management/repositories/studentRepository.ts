@@ -64,6 +64,14 @@ export const studentRepository = {
     const response = await fetch(apiUrl(`/api/teacher/students/${studentId}/history`), { cache: "no-store" });
     return readJson<StudentLearningHistory[]>(response, "학생 학습 이력을 불러오지 못했습니다.");
   },
+  async deleteSubmissionHistory(studentId: string, submissionId: string) {
+    const response = await fetch(apiUrl(`/api/teacher/students/${studentId}/history`), {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ submissionId }),
+    });
+    await readJson<{ deleted: true }>(response, "제출 내역 삭제 중 오류가 발생했습니다.");
+  },
 };
 
 export const studentAvatars = ["robot", "boy-blonde", "girl-brown", "boy-dark", "girl-black", "boy-orange", "girl-red"];

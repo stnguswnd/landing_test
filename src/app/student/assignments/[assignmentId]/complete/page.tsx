@@ -9,6 +9,7 @@ import { studentAssignmentRepository } from "@/features/assignments/repositories
 import { assignmentTypeLabel, normalizeAssignmentType } from "@/lib/assignmentTypes";
 import { formatDateTime, formatDue } from "@/lib/format";
 import { getStudentSession } from "@/server/auth/studentSession";
+import type { AssignmentSubmissionPart } from "@/types/assignment";
 
 function statusLabel(status?: string) {
   if (status === "reviewed" || status === "completed") return "완료";
@@ -50,6 +51,96 @@ function completionCopy(type: string) {
   };
 }
 
+function partTypeLabel(type?: string) {
+  if (type === "listening") return "리스닝";
+  if (type === "recording") return "녹음 제출";
+  if (type === "writing") return "라이팅";
+  if (type === "photo_submission") return "사진 제출";
+  if (type === "vocabulary_example") return "단어 예문";
+  if (type === "vocabulary_recording") return "단어 녹음";
+  return "Part";
+}
+
+function MultiPartSubmissionView({ parts }: { parts: AssignmentSubmissionPart[] }) {
+  return (
+    <div className="grid gap-4">
+      {parts.map((part, index) => {
+        const images = (part.attachments ?? []).filter((attachment) => attachment.attachmentType === "image");
+        const audios = (part.attachments ?? []).filter((attachment) => attachment.attachmentType === "audio");
+        return (
+          <Card key={part.id}>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone="blue">Part {index + 1}</Badge>
+              <Badge tone="green">{partTypeLabel(part.partType)}</Badge>
+            </div>
+            <h2 className="mt-3 text-lg font-bold">{part.title || `Part ${index + 1}`}</h2>
+            {part.scriptText && <p className="mt-3 whitespace-pre-wrap rounded-lg bg-paper p-4 leading-7">{part.scriptText}</p>}
+
+            {(part.originalAnswerText || part.answerText || part.aiCorrectedText) && (
+              <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                {part.originalAnswerText && (
+                  <div className="rounded-lg border border-line p-4">
+                    <p className="font-bold">처음 작성한 내용</p>
+                    <p className="mt-2 whitespace-pre-wrap leading-7 text-slate-700">{part.originalAnswerText}</p>
+                  </div>
+                )}
+                {part.aiCorrectedText && (
+                  <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
+                    <p className="font-bold text-action">AI 첨삭</p>
+                    <p className="mt-2 whitespace-pre-wrap leading-7 text-slate-700">{part.aiCorrectedText}</p>
+                  </div>
+                )}
+                {part.answerText && (
+                  <div className="rounded-lg border border-green-100 bg-green-50 p-4">
+                    <p className="font-bold text-green-800">제출 내용</p>
+                    <p className="mt-2 whitespace-pre-wrap leading-7 text-slate-700">{part.answerText}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {part.aiFeedback && (
+              <div className="mt-4 rounded-lg bg-paper p-4">
+                <p className="font-bold">AI 피드백</p>
+                <p className="mt-2 whitespace-pre-wrap leading-7">{part.aiFeedback}</p>
+                {part.aiGrammarNotes && <p className="mt-3 whitespace-pre-wrap text-sm leading-6"><strong>문법 교정사항</strong><br />{part.aiGrammarNotes}</p>}
+              </div>
+            )}
+
+            {images.length > 0 && (
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {images.map((image) => (
+                  <a key={image.id} href={image.fileUrl} target="_blank" rel="noreferrer" className="overflow-hidden rounded-lg border border-line bg-slate-50">
+                    <img src={image.fileUrl} alt={image.fileName ?? "제출 사진"} className="aspect-[4/3] w-full object-cover" />
+                    <p className="truncate px-3 py-2 text-xs font-semibold text-slate-600">{image.fileName ?? "-"}</p>
+                  </a>
+                ))}
+              </div>
+            )}
+
+            {(part.recordingUrl || audios.length > 0) && (
+              <div className="mt-4 grid gap-3">
+                {part.recordingUrl && (
+                  <div>
+                    <p className="mb-2 text-sm font-bold text-slate-600">녹음 파일</p>
+                    <AudioPlayer src={part.recordingUrl} preload="metadata" />
+                  </div>
+                )}
+                {audios.map((audio) => (
+                  <div key={audio.id}>
+                    <p className="mb-2 text-sm font-bold text-slate-600">{audio.fileName ?? "오디오 파일"}</p>
+                    {audio.fileUrl && <AudioPlayer src={audio.fileUrl} preload="metadata" />}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
 export default async function CompletePage({ params }: { params: Promise<{ assignmentId: string }> }) {
   const [{ assignmentId }, session] = await Promise.all([params, getStudentSession()]);
   if (!session) redirect("/login");
@@ -62,6 +153,8 @@ export default async function CompletePage({ params }: { params: Promise<{ assig
   const copy = completionCopy(type);
   const submittedAt = assignment.submittedAt;
   const isLate = Boolean(submittedAt && assignment.dueAt && new Date(submittedAt).getTime() > new Date(assignment.dueAt).getTime());
+  const submittedParts = assignment.submissionParts ?? [];
+  const isMultiPartSubmission = submittedParts.length > 0;
 
   return (
     <StudentLayout title="제출 내용">
@@ -89,7 +182,9 @@ export default async function CompletePage({ params }: { params: Promise<{ assig
           )}
         </Card>
 
-        {type === "listening_recording" && (
+        {isMultiPartSubmission && <MultiPartSubmissionView parts={submittedParts} />}
+
+        {!isMultiPartSubmission && type === "listening_recording" && (
           <>
             {item?.audioUrl && (
               <Card>
@@ -108,7 +203,7 @@ export default async function CompletePage({ params }: { params: Promise<{ assig
           </>
         )}
 
-        {type === "vocabulary_recording" && (
+        {!isMultiPartSubmission && type === "vocabulary_recording" && (
           <>
             <Card>
               <h2 className="font-bold">단어장</h2>
@@ -132,14 +227,14 @@ export default async function CompletePage({ params }: { params: Promise<{ assig
           </>
         )}
 
-        {type === "listening" && item?.audioUrl && (
+        {!isMultiPartSubmission && type === "listening" && item?.audioUrl && (
           <Card>
             <h2 className="font-bold">원본 MP3 다시 듣기</h2>
             <AudioPlayer className="mt-4" src={item.audioUrl} preload="metadata" />
           </Card>
         )}
 
-        {type === "writing" && (
+        {!isMultiPartSubmission && type === "writing" && (
           <Card>
             <h2 className="text-lg font-bold">라이팅 제출 내용</h2>
             <div className="mt-4 grid gap-4 lg:grid-cols-2">
@@ -161,7 +256,7 @@ export default async function CompletePage({ params }: { params: Promise<{ assig
           </Card>
         )}
 
-        {type === "vocabulary_example" && (
+        {!isMultiPartSubmission && type === "vocabulary_example" && (
           <Card>
             <h2 className="text-lg font-bold">단어장 예문 제출 내용</h2>
             <div className="mt-4 grid gap-3">
@@ -188,10 +283,7 @@ export default async function CompletePage({ params }: { params: Promise<{ assig
 
         <div className="grid gap-3 sm:grid-cols-3">
           <Button href="/student/home" variant="secondary" className="min-h-12">과제 목록으로</Button>
-          <Button href={`/student/assignments/${assignmentId}`} variant="secondary" className="min-h-12">과제 안내 보기</Button>
-          {assignment.targetStatus === "returned" && (
-            <Button href={`/student/assignments/${assignmentId}`} className="min-h-12">다시 제출하기</Button>
-          )}
+          <Button href={`/student/assignments/${assignmentId}?resubmit=1`} className="min-h-12">다시 제출하기</Button>
         </div>
       </div>
     </StudentLayout>

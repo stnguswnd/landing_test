@@ -17,6 +17,7 @@ type TeacherAssignmentPreview = {
   title: string;
   description: string;
   type: string;
+  partTypes?: string[];
   subject: string;
   status: string;
   imageUrl: string;
@@ -35,6 +36,31 @@ type TeacherAssignmentPreview = {
     writingExample?: string;
   };
   vocabularyItems?: Array<{ id: string; word: string; meaning: string; orderIndex: number }>;
+  parts?: Array<{
+    id: string;
+    partType: string;
+    title: string;
+    instruction: string;
+    scriptText: string;
+    writingMode?: string;
+    writingUnit?: string;
+    writingHint?: string;
+    writingExample?: string;
+    vocabularyItems?: Array<{ id: string; word: string; meaning: string; orderIndex: number }>;
+    isRequired: boolean;
+    allowSubmission: boolean;
+    minSubmissionCount: number;
+    maxSubmissionCount: number;
+    orderIndex: number;
+    status: string;
+    attachments?: Array<{
+      id: string;
+      attachmentType: "image" | "audio" | "video" | "file";
+      fileUrl: string;
+      fileName: string;
+      orderIndex: number;
+    }>;
+  }>;
 };
 
 type AiPreview = {
@@ -44,10 +70,33 @@ type AiPreview = {
   expressionNotes?: string[];
 };
 
+type PreviewAttachment = NonNullable<NonNullable<TeacherAssignmentPreview["parts"]>[number]["attachments"]>[number];
+
 function formatSeconds(value: number) {
   const minutes = Math.floor(value / 60);
   const seconds = Math.floor(value % 60);
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function assignmentImageAttachment(assignment: TeacherAssignmentPreview): PreviewAttachment[] {
+  if (!assignment.imageUrl) return [];
+  return [{
+    id: `${assignment.id}-assignment-image`,
+    attachmentType: "image",
+    fileUrl: assignment.imageUrl,
+    fileName: assignment.title || "과제 이미지",
+    orderIndex: -1,
+  }];
+}
+
+function mergeImageAttachments(assignment: TeacherAssignmentPreview, attachments: PreviewAttachment[] = []) {
+  const seen = new Set<string>();
+  return [...assignmentImageAttachment(assignment), ...attachments.filter((attachment) => attachment.attachmentType === "image")]
+    .filter((attachment) => {
+      if (!attachment.fileUrl || seen.has(attachment.fileUrl)) return false;
+      seen.add(attachment.fileUrl);
+      return true;
+    });
 }
 
 export default function TeacherAssignmentPreviewPage() {
@@ -74,26 +123,250 @@ export default function TeacherAssignmentPreviewPage() {
       </div>
       {error && <Card><p className="text-sm font-semibold text-danger">{error}</p></Card>}
       {!assignment && !error && <Card><p className="text-sm text-slate-500">미리보기를 불러오는 중입니다.</p></Card>}
-      {normalizedAssignment?.type === "listening_recording" && <RlPreview assignment={normalizedAssignment} />}
-      {normalizedAssignment?.type === "listening" && <ListeningPreview assignment={normalizedAssignment} />}
-      {normalizedAssignment?.type === "writing" && <WritingPreview assignment={normalizedAssignment} />}
-      {normalizedAssignment?.type === "vocabulary_example" && <VocabularyPreview assignment={normalizedAssignment} mode="example" />}
-      {normalizedAssignment?.type === "vocabulary_recording" && <VocabularyPreview assignment={normalizedAssignment} mode="recording" />}
+      {assignment?.parts?.length ? (
+        <MultiPartPreview assignment={assignment} />
+      ) : (
+        <>
+          {normalizedAssignment?.type === "listening_recording" && <RlPreview assignment={normalizedAssignment} />}
+          {normalizedAssignment?.type === "listening" && <ListeningPreview assignment={normalizedAssignment} />}
+          {normalizedAssignment?.type === "writing" && <WritingPreview assignment={normalizedAssignment} />}
+          {normalizedAssignment?.type === "vocabulary_example" && <VocabularyPreview assignment={normalizedAssignment} mode="example" />}
+          {normalizedAssignment?.type === "vocabulary_recording" && <VocabularyPreview assignment={normalizedAssignment} mode="recording" />}
+          {normalizedAssignment?.type === "photo_submission" && <PhotoSubmissionPreview assignment={normalizedAssignment} />}
+        </>
+      )}
     </TeacherLayout>
   );
 }
 
+function partTypeLabel(type: string) {
+  if (type === "recording") return "RL 녹음";
+  if (type === "listening") return "리스닝";
+  if (type === "writing") return "라이팅";
+  if (type === "photo_submission") return "사진 제출";
+  if (type === "vocabulary_example") return "단어장 예문";
+  if (type === "vocabulary_recording") return "단어장 녹음";
+  return assignmentTypeLabel(type);
+}
+
 function Header({ assignment }: { assignment: TeacherAssignmentPreview }) {
+  const partTypes = assignment.partTypes?.length
+    ? assignment.partTypes
+    : Array.from(new Set((assignment.parts ?? []).filter((part) => part.status !== "archived").map((part) => part.partType)));
   return (
     <Card className="shadow-soft">
       <div className="flex flex-wrap gap-2">
         <Badge tone="blue">{assignment.subject || "Phonics"}</Badge>
-        <Badge tone="green">{assignmentTypeLabel(assignment.type)}</Badge>
+        {(partTypes.length ? partTypes : [assignment.type]).map((type) => (
+          <Badge key={type} tone="green">{partTypeLabel(type)}</Badge>
+        ))}
         <Badge>{assignment.status}</Badge>
       </div>
       <h1 className="mt-4 text-2xl font-bold">{assignment.title}</h1>
       {assignment.description && <p className="mt-2 leading-7 text-slate-600">{assignment.description}</p>}
     </Card>
+  );
+}
+
+function MultiPartPreview({ assignment }: { assignment: TeacherAssignmentPreview }) {
+  const parts = (assignment.parts ?? []).filter((part) => part.status !== "archived").sort((a, b) => a.orderIndex - b.orderIndex);
+  return (
+    <div className="grid gap-4">
+      <Header assignment={assignment} />
+      <Card>
+        <h2 className="font-bold">숙제 내용</h2>
+        <p className="mt-3 whitespace-pre-wrap leading-7 text-slate-700">{assignment.description || "설명이 없습니다."}</p>
+      </Card>
+      <div className="grid gap-4">
+        {parts.map((part, index) => <PartPreviewCard key={part.id} assignment={assignment} part={part} index={index} />)}
+      </div>
+    </div>
+  );
+}
+
+function PartPreviewCard({
+  assignment,
+  part,
+  index,
+}: {
+  assignment: TeacherAssignmentPreview;
+  part: NonNullable<TeacherAssignmentPreview["parts"]>[number];
+  index: number;
+}) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const recordedAudioRef = useRef<HTMLAudioElement | null>(null);
+  const recorder = useAudioRecorder();
+  const [hasListenedFullAudio, setHasListenedFullAudio] = useState(false);
+  const [step, setStep] = useState<1 | 2>(1);
+  const [answerText, setAnswerText] = useState("");
+  const imageAttachments = mergeImageAttachments(assignment, part.attachments ?? []);
+  const audioAttachments = (part.attachments ?? []).filter((attachment) => attachment.attachmentType === "audio");
+  const firstAudioUrl = audioAttachments[0]?.fileUrl ?? "";
+  const isSentences = part.writingUnit === "sentences";
+  const isTopicDiary = part.writingMode === "topic_diary";
+
+  function goStep(nextStep: 1 | 2) {
+    if (nextStep === 2 && !hasListenedFullAudio) return;
+    audioRef.current?.pause();
+    recordedAudioRef.current?.pause();
+    if (recorder.state === "recording") recorder.stopRecording();
+    setStep(nextStep);
+  }
+
+  async function startRecording() {
+    audioRef.current?.pause();
+    recordedAudioRef.current?.pause();
+    await recorder.startRecording();
+  }
+
+  return (
+    <Card>
+      <div className="flex flex-wrap gap-2">
+        <Badge tone="blue">Part {index + 1}</Badge>
+        <Badge tone="green">{partTypeLabel(part.partType)}</Badge>
+        {part.isRequired && <Badge>필수</Badge>}
+      </div>
+      <h2 className="mt-3 text-lg font-bold">{part.title || `Part ${index + 1}`}</h2>
+
+      {(part.partType === "recording" || part.partType === "listening") && (
+        <div className="mt-4 grid gap-4">
+          <PartContent part={part} imageAttachments={imageAttachments} />
+          <div className="rounded-lg border border-line p-4">
+            <p className="text-sm font-bold text-action">{part.partType === "recording" && step === 2 ? "Record" : "Listen"}</p>
+            <h3 className="mt-2 font-bold">{part.partType === "recording" && step === 2 ? "문장을 보며 내 목소리로 녹음해보세요." : "원본 음원을 끝까지 듣습니다."}</h3>
+            {step === 1 && (
+              <>
+                <AudioPlayer ref={audioRef} className="mt-4" src={firstAudioUrl} preload="metadata" onEnded={() => setHasListenedFullAudio(true)} />
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <Button type="button" variant="secondary" onClick={() => { if (audioRef.current) audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 10); }}>-10초</Button>
+                  <Button type="button" variant="secondary" onClick={() => { if (audioRef.current) audioRef.current.currentTime = Math.min(audioRef.current.duration || 0, audioRef.current.currentTime + 10); }}>+10초</Button>
+                </div>
+              </>
+            )}
+            {part.partType === "recording" && step === 2 && (
+              <>
+                <div className="mt-4 rounded-lg border border-line p-4">
+                  <p className="font-semibold">녹음 상태: {recorder.state === "recording" ? "녹음 중" : recorder.previewUrl ? "녹음 완료" : "대기 중"}</p>
+                  <p className="mt-1 text-sm text-slate-500">녹음 시간: {formatSeconds(recorder.durationSec)}</p>
+                </div>
+                {recorder.previewUrl && <AudioPlayer ref={recordedAudioRef} className="mt-4" src={recorder.previewUrl} preload="metadata" />}
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {recorder.state === "recording" ? (
+                    <Button type="button" variant="danger" onClick={recorder.stopRecording}>녹음 중지</Button>
+                  ) : (
+                    <Button type="button" onClick={startRecording}>녹음 시작</Button>
+                  )}
+                  <Button type="button" variant="secondary" onClick={recorder.resetRecording} disabled={!recorder.previewUrl}>다시 녹음하기</Button>
+                </div>
+              </>
+            )}
+          </div>
+          {part.partType === "recording" ? (
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Button type="button" variant={step === 1 ? "primary" : "secondary"} onClick={() => goStep(1)}>듣기</Button>
+              <Button type="button" variant={step === 2 ? "primary" : "secondary"} disabled={!hasListenedFullAudio} onClick={() => goStep(2)}>녹음</Button>
+              <Button type="button" disabled={!recorder.previewUrl}>저장하기</Button>
+            </div>
+          ) : (
+            <Button type="button" disabled={!hasListenedFullAudio}>저장하기</Button>
+          )}
+        </div>
+      )}
+
+      {part.partType === "writing" && (
+        <div className="mt-4 grid gap-4">
+          <Card className="border border-line shadow-none">
+            <p className="text-sm font-bold text-action">Writing</p>
+            <h3 className="mt-2 font-bold">
+              {isTopicDiary
+                ? `Write 4 ${isSentences ? "sentences" : "paragraphs"} about below.`
+                : `See the picture and describe it in 4 ${isSentences ? "sentences" : "paragraphs"}.`}
+            </h3>
+          </Card>
+          <PartContent part={part} imageAttachments={imageAttachments} />
+          <label className="grid gap-2 text-sm font-bold">
+            내가 쓴 글
+            <Textarea className="min-h-[160px]" value={answerText} onChange={(event) => setAnswerText(event.target.value)} />
+          </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Button type="button" variant="secondary" disabled={!answerText.trim()}>AI 첨삭받기</Button>
+            <Button type="button" disabled={!answerText.trim()}>저장하기</Button>
+          </div>
+        </div>
+      )}
+
+      {(part.partType === "vocabulary_example" || part.partType === "vocabulary_recording") && (
+        <div className="mt-4 grid gap-4">
+          <PartContent part={part} imageAttachments={imageAttachments} />
+          <div className="rounded-lg border border-line p-4">
+            <h3 className="font-bold">단어장</h3>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              {(part.vocabularyItems ?? []).map((item) => (
+                <div key={item.id} className="grid grid-cols-2 rounded-md border border-line">
+                  <span className="border-r border-line px-3 py-2 font-bold">{item.word}</span>
+                  <span className="px-3 py-2">{item.meaning}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <p className="rounded-lg bg-blue-50 p-3 text-sm font-semibold text-action">
+            {part.partType === "vocabulary_example" ? "학생은 단어별로 문장을 작성하고 AI 첨삭을 받습니다." : "학생은 단어장을 보며 녹음하고 저장합니다."}
+          </p>
+        </div>
+      )}
+
+      {part.partType === "photo_submission" && (
+        <div className="mt-4 grid gap-4">
+          <PartContent part={part} imageAttachments={imageAttachments} audioAttachments={audioAttachments} />
+          <div className="rounded-lg border border-dashed border-line p-4">
+            <h3 className="font-bold">사진 제출</h3>
+            <p className="mt-2 text-sm text-slate-500">학생 화면에서는 여기서 여러 장의 사진을 선택하고 저장합니다. 파일 1개당 최대 10MB까지 업로드할 수 있습니다.</p>
+          </div>
+          <Button type="button">저장하기</Button>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function PartContent({
+  part,
+  imageAttachments,
+  audioAttachments = [],
+}: {
+  part: NonNullable<TeacherAssignmentPreview["parts"]>[number];
+  imageAttachments: NonNullable<NonNullable<TeacherAssignmentPreview["parts"]>[number]["attachments"]>;
+  audioAttachments?: NonNullable<NonNullable<TeacherAssignmentPreview["parts"]>[number]["attachments"]>;
+}) {
+  return (
+    <div className="rounded-lg border border-line p-4">
+      {part.instruction && <p className="whitespace-pre-wrap leading-7 text-slate-700">{part.instruction}</p>}
+      {imageAttachments.length > 0 && (
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {imageAttachments.map((attachment) => (
+            <a key={attachment.id} href={attachment.fileUrl} target="_blank" rel="noreferrer" className="overflow-hidden rounded-lg border border-line bg-slate-50">
+              <img src={attachment.fileUrl} alt={attachment.fileName || part.title} className="h-auto w-full object-contain" />
+            </a>
+          ))}
+        </div>
+      )}
+      {part.scriptText && (
+        <div className="mt-4 rounded-lg bg-paper p-4">
+          <p className="whitespace-pre-wrap leading-7 text-slate-800">{part.scriptText}</p>
+        </div>
+      )}
+      {(part.writingHint || part.writingExample) && (
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {part.writingHint && <div className="rounded-lg border border-yellow-100 bg-yellow-50 p-4"><p className="font-bold text-yellow-800">힌트</p><p className="mt-2 whitespace-pre-wrap text-sm leading-6">{part.writingHint}</p></div>}
+          {part.writingExample && <div className="rounded-lg border border-green-100 bg-green-50 p-4"><p className="font-bold text-green-800">예시</p><p className="mt-2 whitespace-pre-wrap text-sm leading-6">{part.writingExample}</p></div>}
+        </div>
+      )}
+      {audioAttachments.length > 0 && (
+        <div className="mt-4 grid gap-3">
+          {audioAttachments.map((attachment) => <AudioPlayer key={attachment.id} src={attachment.fileUrl} preload="metadata" />)}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -127,15 +400,28 @@ function VocabularyPreview({ assignment, mode }: { assignment: TeacherAssignment
   );
 }
 
-function Content({ assignment, promptText }: { assignment: TeacherAssignmentPreview; promptText?: string }) {
+function Content({
+  assignment,
+  promptText,
+  imageAttachments = [],
+}: {
+  assignment: TeacherAssignmentPreview;
+  promptText?: string;
+  imageAttachments?: PreviewAttachment[];
+}) {
   const text = promptText ?? assignment.item.passageText;
   const hasWritingGuide = assignment.item.writingInstructions || assignment.item.writingHint || assignment.item.writingExample;
+  const displayImages = mergeImageAttachments(assignment, imageAttachments);
   return (
     <Card>
       <h2 className="font-bold">이미지 / 스크립트</h2>
-      {assignment.imageUrl && (
-        <div className="mt-4 overflow-hidden rounded-lg border border-line bg-slate-50">
-          <img src={assignment.imageUrl} alt="" className="max-h-[420px] w-full object-contain" />
+      {displayImages.length > 0 && (
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {displayImages.map((image) => (
+            <a key={image.id} href={image.fileUrl} target="_blank" rel="noreferrer" className="overflow-hidden rounded-lg border border-line bg-slate-50">
+              <img src={image.fileUrl} alt={image.fileName || "과제 이미지"} className="h-auto w-full object-contain" />
+            </a>
+          ))}
         </div>
       )}
       {text && (
@@ -165,7 +451,7 @@ function Content({ assignment, promptText }: { assignment: TeacherAssignmentPrev
           )}
         </div>
       )}
-      {!assignment.imageUrl && !text && !hasWritingGuide && <p className="mt-3 text-sm text-slate-500">표시할 이미지 또는 스크립트가 없습니다.</p>}
+      {displayImages.length === 0 && !text && !hasWritingGuide && <p className="mt-3 text-sm text-slate-500">표시할 이미지 또는 스크립트가 없습니다.</p>}
     </Card>
   );
 }
@@ -273,6 +559,28 @@ function ListeningPreview({ assignment }: { assignment: TeacherAssignmentPreview
         <Button type="button" disabled={!hasListenedFullAudio} onClick={() => setCompleteOpen(true)}>완료하기</Button>
       </div>
       {completeOpen && <PreviewSubmitModal title="완료하시겠습니까?" body="미리보기에서는 완료 상태가 저장되지 않습니다." onClose={() => setCompleteOpen(false)} />}
+    </div>
+  );
+}
+
+function PhotoSubmissionPreview({ assignment }: { assignment: TeacherAssignmentPreview }) {
+  return (
+    <div className="grid gap-4">
+      <Header assignment={assignment} />
+      <Card>
+        <p className="text-sm font-bold text-action">Photo Submission</p>
+        <h2 className="mt-2 text-lg font-bold">사진 설명과 스크립트를 확인한 뒤 사진을 첨부합니다.</h2>
+      </Card>
+      <Content assignment={assignment} />
+      <Card>
+        <h2 className="font-bold">사진 제출</h2>
+        <p className="mt-3 rounded-lg border border-dashed border-line p-4 text-sm text-slate-500">
+          학생 화면에서는 여기서 여러 장의 사진을 선택하고 제출합니다. 파일 1개당 최대 10MB까지 업로드할 수 있습니다.
+        </p>
+        <div className="mt-5 flex justify-end">
+          <Button type="button" onClick={() => undefined}>제출하기</Button>
+        </div>
+      </Card>
     </div>
   );
 }

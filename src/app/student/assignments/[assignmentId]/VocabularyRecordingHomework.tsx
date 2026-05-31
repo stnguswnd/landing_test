@@ -6,8 +6,10 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import type { Assignment } from "@/types/assignment";
+import type { Assignment, StudentAssignmentDraftAttachment } from "@/types/assignment";
+import type { PartMode } from "./partMode";
 import { ReadyStepButton } from "./ReadyStepButton";
+import { SubmissionAlertModal } from "./SubmissionAlertModal";
 
 function formatDateTime(value?: string | null) {
   if (!value) return "-";
@@ -20,7 +22,7 @@ function formatSeconds(value: number) {
   return `${minutes}:${seconds}`;
 }
 
-export function VocabularyRecordingHomework({ assignment }: { assignment: Assignment }) {
+export function VocabularyRecordingHomework({ assignment, partMode, draftAttachments = [] }: { assignment: Assignment; partMode?: PartMode; draftAttachments?: StudentAssignmentDraftAttachment[] }) {
   const router = useRouter();
   const item = assignment.items[0];
   const vocabularyItems = assignment.vocabularyItems ?? [];
@@ -32,8 +34,10 @@ export function VocabularyRecordingHomework({ assignment }: { assignment: Assign
   const [recordingStatus, setRecordingStatus] = useState<"idle" | "recording" | "recorded">("idle");
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [recordingBlob, setRecordingBlob] = useState<Blob | null>(null);
-  const [recordingUrl, setRecordingUrl] = useState<string | null>(assignment.items[0]?.recordingUrl ?? null);
+  const draftAudio = draftAttachments.find((attachment) => attachment.attachmentType === "audio");
+  const [recordingUrl, setRecordingUrl] = useState<string | null>(draftAudio?.fileUrl ?? assignment.items[0]?.recordingUrl ?? null);
   const [message, setMessage] = useState("");
+  const [alertMessage, setAlertMessage] = useState("");
   const [isSubmitOpen, setIsSubmitOpen] = useState(false);
   const [pending, startTransition] = useTransition();
 
@@ -108,6 +112,17 @@ export function VocabularyRecordingHomework({ assignment }: { assignment: Assign
     });
   }
 
+  function savePart() {
+    if (!partMode || !recordingBlob || recordingStatus === "recording") return;
+    partMode.onSave({
+      data: { recordingSeconds },
+      files: [recordingBlob],
+      attachmentType: "audio",
+      replaceAttachments: true,
+      durationSec: recordingSeconds,
+    });
+  }
+
   return (
     <div className="grid gap-4 pb-56">
       <Card>
@@ -134,8 +149,6 @@ export function VocabularyRecordingHomework({ assignment }: { assignment: Assign
         </div>
         {vocabularyItems.length === 0 && <p className="text-sm text-slate-500">등록된 단어가 없습니다. 선생님에게 문의해주세요.</p>}
       </Card>
-
-      {message && <p className="rounded-md bg-red-50 px-3 py-2 text-sm font-semibold text-danger">{message}</p>}
 
       <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-line bg-white/95 p-4 backdrop-blur">
         <div className="mx-auto grid max-w-5xl gap-4 rounded-2xl border border-line bg-white p-4 shadow-soft">
@@ -165,13 +178,20 @@ export function VocabularyRecordingHomework({ assignment }: { assignment: Assign
               다시 녹음하기
             </Button>
           </div>
-          <ReadyStepButton className="min-h-12 text-base" disabled={!recordingBlob || recordingStatus === "recording" || pending} onClick={() => setIsSubmitOpen(true)} tooltip="녹음이 완료됐어요. 제출할 수 있어요.">
-            제출하기
+          <ReadyStepButton
+            className="min-h-12 text-base"
+            disabled={!recordingBlob || recordingStatus === "recording" || pending}
+            disabledReason={recordingStatus === "recording" ? "녹음을 중지한 뒤 제출할 수 있습니다." : !recordingBlob ? "녹음을 완료한 뒤 제출할 수 있습니다." : undefined}
+            onDisabledClick={setAlertMessage}
+            onClick={partMode ? savePart : () => setIsSubmitOpen(true)}
+            tooltip={partMode ? partMode.tooltip ?? "녹음이 완료됐어요. 저장할 수 있어요." : "녹음이 완료됐어요. 제출할 수 있어요."}
+          >
+            {partMode ? partMode.label ?? "저장하기" : "제출하기"}
           </ReadyStepButton>
         </div>
       </div>
 
-      {isSubmitOpen && (
+      {!partMode && isSubmitOpen && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/35 p-4" role="dialog" aria-modal="true">
           <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-soft">
             <h2 className="text-xl font-extrabold">제출하시겠습니까?</h2>
@@ -182,6 +202,9 @@ export function VocabularyRecordingHomework({ assignment }: { assignment: Assign
             </div>
           </div>
         </div>
+      )}
+      {(message || alertMessage) && (
+        <SubmissionAlertModal message={message || alertMessage} onClose={() => { setMessage(""); setAlertMessage(""); }} />
       )}
     </div>
   );

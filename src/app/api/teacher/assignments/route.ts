@@ -46,12 +46,87 @@ type AssignmentRow = {
   vocabulary_items: Array<{
     id: string;
     assignment_id: string;
+    assignment_part_id: string | null;
     word: string;
     meaning: string;
     order_index: number;
   }> | null;
+  parts: AssignmentPartRow[] | null;
   updated_at: Date;
 };
+
+type AssignmentPartRow = {
+  id: string;
+  assignment_id: string;
+  part_type: string;
+  title: string | null;
+  instruction: string | null;
+  script_text: string | null;
+  writing_mode: string | null;
+  writing_unit: string | null;
+  writing_hint: string | null;
+  writing_example: string | null;
+  is_required: boolean;
+  allow_submission: boolean;
+  min_submission_count: number;
+  max_submission_count: number;
+  order_index: number;
+  status: "active" | "archived";
+  archived_at: string | null;
+  archived_reason: string | null;
+  attachments: AssignmentPartAttachmentRow[] | null;
+  vocabulary_items: AssignmentVocabularyItemRow[] | null;
+};
+
+type AssignmentVocabularyItemRow = {
+  id: string;
+  assignment_id: string;
+  assignment_part_id: string | null;
+  word: string;
+  meaning: string;
+  order_index: number;
+};
+
+type AssignmentPartAttachmentRow = {
+  id: string;
+  assignment_part_id: string;
+  attachment_type: "image" | "audio" | "video" | "file";
+  storage_bucket: string;
+  storage_path: string;
+  file_url: string | null;
+  file_name: string | null;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  duration_sec: number | null;
+  width_px: number | null;
+  height_px: number | null;
+  order_index: number;
+};
+
+type AssignmentPartInput = {
+  id?: string;
+  partType: string;
+  title: string;
+  instruction: string;
+  scriptText: string;
+  writingMode?: string | null;
+  writingUnit?: string | null;
+  writingHint?: string | null;
+  writingExample?: string | null;
+  vocabularyRows?: Array<{ word: string; meaning: string; orderIndex: number }>;
+  isRequired: boolean;
+  allowSubmission: boolean;
+  minSubmissionCount: number;
+  maxSubmissionCount: number;
+  orderIndex: number;
+};
+
+type SyncedAssignmentPart = {
+  id: string;
+  orderIndex: number;
+};
+
+type PartFilesByIndex = Map<number, { imageFiles: File[]; audioFiles: File[] }>;
 
 type AssignmentTargetInput = {
   classId: string;
@@ -77,6 +152,7 @@ type AssignmentListRow = {
   title: string;
   description: string | null;
   assignment_type: string;
+  assignment_part_types: string[] | null;
   status: string;
   subject_names: string[] | null;
   class_names: string[] | null;
@@ -172,7 +248,26 @@ async function signedUrl(bucket: string, path: string | null) {
   return error ? "" : data.signedUrl;
 }
 
+async function mapPartAttachment(attachment: AssignmentPartAttachmentRow) {
+  return {
+    id: attachment.id,
+    assignmentPartId: attachment.assignment_part_id,
+    attachmentType: attachment.attachment_type,
+    storageBucket: attachment.storage_bucket,
+    storagePath: attachment.storage_path,
+    fileUrl: (await signedUrl(attachment.storage_bucket, attachment.storage_path)) || attachment.file_url || "",
+    fileName: attachment.file_name ?? "",
+    mimeType: attachment.mime_type ?? "",
+    fileSizeBytes: attachment.file_size_bytes ?? undefined,
+    durationSec: attachment.duration_sec ?? undefined,
+    widthPx: attachment.width_px ?? undefined,
+    heightPx: attachment.height_px ?? undefined,
+    orderIndex: attachment.order_index,
+  };
+}
+
 async function mapAssignment(row: AssignmentRow) {
+  const activeParts = (row.parts ?? []).filter((part) => part.status !== "archived");
   return {
     id: row.id,
     title: row.title,
@@ -203,10 +298,41 @@ async function mapAssignment(row: AssignmentRow) {
     vocabularyItems: (row.vocabulary_items ?? []).map((item) => ({
       id: item.id,
       assignmentId: item.assignment_id,
+      assignmentPartId: item.assignment_part_id ?? undefined,
       word: item.word,
       meaning: item.meaning,
       orderIndex: item.order_index,
     })),
+    partTypes: Array.from(new Set(activeParts.map((part) => part.part_type))),
+    parts: await Promise.all((row.parts ?? []).map(async (part) => ({
+      id: part.id,
+      assignmentId: part.assignment_id,
+      partType: part.part_type,
+      title: part.title ?? "",
+      instruction: part.instruction ?? "",
+      scriptText: part.script_text ?? "",
+      writingMode: part.writing_mode ?? undefined,
+      writingUnit: part.writing_unit ?? undefined,
+      writingHint: part.writing_hint ?? "",
+      writingExample: part.writing_example ?? "",
+      vocabularyItems: (part.vocabulary_items ?? []).map((item) => ({
+        id: item.id,
+        assignmentId: item.assignment_id,
+        assignmentPartId: item.assignment_part_id ?? undefined,
+        word: item.word,
+        meaning: item.meaning,
+        orderIndex: item.order_index,
+      })),
+      isRequired: part.is_required,
+      allowSubmission: part.allow_submission,
+      minSubmissionCount: part.min_submission_count,
+      maxSubmissionCount: part.max_submission_count,
+      orderIndex: part.order_index,
+      status: part.status,
+      archivedAt: part.archived_at ?? undefined,
+      archivedReason: part.archived_reason ?? undefined,
+      attachments: await Promise.all((part.attachments ?? []).map(mapPartAttachment)),
+    }))),
     updatedAt: row.updated_at.toISOString(),
   };
 }
@@ -245,6 +371,7 @@ async function getAssignmentRow(id: string, teacherId: string) {
               json_build_object(
                 'id', avi.id,
                 'assignment_id', avi.assignment_id,
+                'assignment_part_id', avi.assignment_part_id,
                 'word', avi.word,
                 'meaning', avi.meaning,
                 'order_index', avi.order_index
@@ -256,6 +383,79 @@ async function getAssignmentRow(id: string, teacherId: string) {
           ),
           '[]'::json
         ) as vocabulary_items,
+        coalesce(
+          (
+            select json_agg(
+              json_build_object(
+                'id', ap.id,
+                'assignment_id', ap.assignment_id,
+                'part_type', ap.part_type,
+                'title', ap.title,
+                'instruction', ap.instruction,
+                'script_text', ap.script_text,
+                'writing_mode', ap.writing_mode,
+                'writing_unit', ap.writing_unit,
+                'writing_hint', ap.writing_hint,
+                'writing_example', ap.writing_example,
+                'is_required', ap.is_required,
+                'allow_submission', ap.allow_submission,
+                'min_submission_count', ap.min_submission_count,
+                'max_submission_count', ap.max_submission_count,
+                'order_index', ap.order_index,
+                'status', ap.status,
+                'archived_at', ap.archived_at,
+                'archived_reason', ap.archived_reason,
+                'attachments', coalesce(
+                  (
+                    select json_agg(
+                      json_build_object(
+                        'id', apa.id,
+                        'assignment_part_id', apa.assignment_part_id,
+                        'attachment_type', apa.attachment_type,
+                        'storage_bucket', apa.storage_bucket,
+                        'storage_path', apa.storage_path,
+                        'file_url', apa.file_url,
+                        'file_name', apa.file_name,
+                        'mime_type', apa.mime_type,
+                        'file_size_bytes', apa.file_size_bytes,
+                        'duration_sec', apa.duration_sec,
+                        'width_px', apa.width_px,
+                        'height_px', apa.height_px,
+                        'order_index', apa.order_index
+                      )
+                      order by apa.attachment_type, apa.order_index
+                    )
+                    from assignment_part_attachments apa
+                    where apa.assignment_part_id = ap.id
+                  ),
+                  '[]'::json
+                ),
+                'vocabulary_items', coalesce(
+                  (
+                    select json_agg(
+                      json_build_object(
+                        'id', avi.id,
+                        'assignment_id', avi.assignment_id,
+                        'assignment_part_id', avi.assignment_part_id,
+                        'word', avi.word,
+                        'meaning', avi.meaning,
+                        'order_index', avi.order_index
+                      )
+                      order by avi.order_index
+                    )
+                    from assignment_vocabulary_items avi
+                    where avi.assignment_part_id = ap.id
+                  ),
+                  '[]'::json
+                )
+              )
+              order by ap.order_index
+            )
+            from assignment_parts ap
+            where ap.assignment_id = a.id
+          ),
+          '[]'::json
+        ) as parts,
         a.updated_at
       from assignments a
       left join assignment_items ai on ai.assignment_id = a.id and ai.order_index = 1
@@ -306,6 +506,19 @@ export async function GET(request: Request) {
           a.title,
           a.description,
           a.assignment_type,
+          coalesce(
+            (
+              select array_agg(part_types.part_type order by part_types.first_order)
+              from (
+                select ap.part_type, min(ap.order_index) as first_order
+                from assignment_parts ap
+                where ap.assignment_id = a.id
+                  and ap.status = 'active'
+                group by ap.part_type
+              ) part_types
+            ),
+            array[]::text[]
+          ) as assignment_part_types,
           a.status,
           coalesce(array_remove(array_agg(distinct cs.subject_name), null), array[]::text[]) as subject_names,
           coalesce(array_remove(array_agg(distinct cs.class_name), null), array[]::text[]) as class_names,
@@ -344,6 +557,7 @@ export async function GET(request: Request) {
         title: row.title,
         description: row.description ?? "",
         assignmentType: normalizeAssignmentType(row.assignment_type),
+        assignmentTypes: row.assignment_part_types?.length ? row.assignment_part_types : [normalizeAssignmentType(row.assignment_type)],
         assignmentSubject: (row.subject_names ?? []).join(", "),
         assignmentSubjects: row.subject_names ?? [],
         status: row.status,
@@ -386,15 +600,23 @@ export async function POST(request: Request) {
   const writingExample = String(formData.get("writingExample") ?? "").trim();
   const passageText = type === "writing" && promptText ? promptText : rawPassageText;
   const vocabularyItems = parseVocabularyItems(formData.get("vocabularyItems"));
+  const parts = parseAssignmentParts(formData.get("parts"), type, {
+    title: passageTitle,
+    instruction: description,
+    scriptText: passageText,
+  });
   const imageFile = formData.get("imageFile");
   const audioFile = formData.get("audioFile");
+  const partFiles = parsePartFiles(formData);
   const targetAssignments = parseTargetAssignments(formData.get("assignments"));
 
   if (!title) {
     return NextResponse.json({ error: "과제 제목을 입력해 주세요." }, { status: 400 });
   }
-  if ((type === "vocabulary_example" || type === "vocabulary_recording") && vocabularyItems.length === 0) {
-    return NextResponse.json({ error: "단어를 1개 이상 입력해주세요." }, { status: 400 });
+  const hasVocabularyPart = parts.some((part) => part.partType === "vocabulary_example" || part.partType === "vocabulary_recording");
+  const hasPartVocabularyRows = parts.some((part) => (part.vocabularyRows ?? []).length > 0);
+  if (hasVocabularyPart && !hasPartVocabularyRows && vocabularyItems.length === 0) {
+      return NextResponse.json({ error: "단어를 1개 이상 입력해주세요." }, { status: 400 });
   }
 
   const existingUploadResult = await query<{
@@ -614,18 +836,9 @@ export async function POST(request: Request) {
       ],
     );
 
-    if (type === "vocabulary_example" || type === "vocabulary_recording") {
-      await client.query("delete from assignment_vocabulary_items where assignment_id = $1", [id]);
-      for (const item of vocabularyItems) {
-        await client.query(
-          `
-            insert into assignment_vocabulary_items (id, assignment_id, word, meaning, order_index)
-            values ($1, $2, $3, $4, $5)
-          `,
-          [`assignment-vocab-${randomUUID()}`, id, item.word, item.meaning, item.orderIndex],
-        );
-      }
-    }
+    const syncedParts = await syncAssignmentParts(client, id, parts);
+    await syncAssignmentPartVocabularyItems(client, id, syncedParts, parts, vocabularyItems);
+    await syncAssignmentPartFiles(client, supabase, id, syncedParts, partFiles);
 
     for (const targetAssignment of targetAssignments) {
       const dueAt = toDueAt(targetAssignment.dueDate, targetAssignment.dueTime);
@@ -806,6 +1019,345 @@ function parseVocabularyItems(value: FormDataEntryValue | null) {
       .map((item, index) => ({ ...item, orderIndex: index }));
   } catch {
     return [];
+  }
+}
+
+function partTypeForAssignmentType(type: string) {
+  if (type === "listening") return "listening";
+  if (type === "writing") return "writing";
+  if (type === "photo_submission") return "photo_submission";
+  if (type === "vocabulary_example") return "vocabulary_example";
+  if (type === "vocabulary_recording") return "vocabulary_recording";
+  return "recording";
+}
+
+function allowsSubmission(partType: string) {
+  return partType !== "instruction" && partType !== "listening";
+}
+
+function isAssignmentPartType(value: string) {
+  return [
+    "instruction",
+    "listening",
+    "recording",
+    "writing",
+    "photo_submission",
+    "vocabulary_example",
+    "vocabulary_recording",
+  ].includes(value);
+}
+
+function defaultAssignmentPart(type: string, fallback: { title: string; instruction: string; scriptText: string }): AssignmentPartInput {
+  const partType = partTypeForAssignmentType(type);
+  return {
+    partType,
+    title: fallback.title,
+    instruction: fallback.instruction,
+    scriptText: fallback.scriptText,
+    writingMode: type === "writing" ? "picture_description" : null,
+    writingUnit: type === "writing" ? "paragraphs" : null,
+    writingHint: null,
+    writingExample: null,
+    vocabularyRows: [],
+    isRequired: true,
+    allowSubmission: allowsSubmission(partType),
+    minSubmissionCount: allowsSubmission(partType) ? 1 : 0,
+    maxSubmissionCount: 1,
+    orderIndex: 0,
+  };
+}
+
+function parseAssignmentParts(
+  value: FormDataEntryValue | null,
+  assignmentType: string,
+  fallback: { title: string; instruction: string; scriptText: string },
+): AssignmentPartInput[] {
+  if (typeof value !== "string" || !value.trim()) return [defaultAssignmentPart(assignmentType, fallback)];
+  try {
+    const parsed = JSON.parse(value) as Array<Partial<AssignmentPartInput>>;
+    if (!Array.isArray(parsed)) return [defaultAssignmentPart(assignmentType, fallback)];
+    const parts = parsed
+      .map((part, index) => {
+        const partType = isAssignmentPartType(String(part.partType ?? "")) ? String(part.partType) : partTypeForAssignmentType(assignmentType);
+        return {
+          id: typeof part.id === "string" && part.id.startsWith("assignment-part-") ? part.id : undefined,
+          partType,
+          title: String(part.title ?? "").trim(),
+          instruction: String(part.instruction ?? "").trim(),
+          scriptText: String(part.scriptText ?? "").trim(),
+          writingMode: String(part.writingMode ?? "").trim() || null,
+          writingUnit: String(part.writingUnit ?? "").trim() || null,
+          writingHint: String(part.writingHint ?? "").trim() || null,
+          writingExample: String(part.writingExample ?? "").trim() || null,
+          vocabularyRows: Array.isArray(part.vocabularyRows)
+            ? part.vocabularyRows
+                .map((item, itemIndex) => ({
+                  word: String((item as { word?: unknown }).word ?? "").trim(),
+                  meaning: String((item as { meaning?: unknown }).meaning ?? "").trim(),
+                  orderIndex: itemIndex,
+                }))
+                .filter((item) => item.word && item.meaning)
+                .slice(0, 200)
+            : [],
+          isRequired: part.isRequired !== false,
+          allowSubmission: typeof part.allowSubmission === "boolean" ? part.allowSubmission : allowsSubmission(partType),
+          minSubmissionCount: Number.isFinite(Number(part.minSubmissionCount)) ? Math.max(0, Number(part.minSubmissionCount)) : (allowsSubmission(partType) ? 1 : 0),
+          maxSubmissionCount: Number.isFinite(Number(part.maxSubmissionCount)) ? Math.max(1, Number(part.maxSubmissionCount)) : 1,
+          orderIndex: index,
+        };
+      })
+      .slice(0, 50);
+    return parts.length ? parts : [defaultAssignmentPart(assignmentType, fallback)];
+  } catch {
+    return [defaultAssignmentPart(assignmentType, fallback)];
+  }
+}
+
+function parsePartFiles(formData: FormData): PartFilesByIndex {
+  const filesByIndex: PartFilesByIndex = new Map();
+  for (const [key, value] of formData.entries()) {
+    if (!(value instanceof File) || value.size === 0) continue;
+    const match = key.match(/^part(Image|Audio)Files\[(\d+)\]$/);
+    if (!match) continue;
+    const index = Number(match[2]);
+    if (!Number.isInteger(index) || index < 0) continue;
+    const current = filesByIndex.get(index) ?? { imageFiles: [], audioFiles: [] };
+    if (match[1] === "Image") current.imageFiles.push(value);
+    if (match[1] === "Audio") current.audioFiles.push(value);
+    filesByIndex.set(index, current);
+  }
+  return filesByIndex;
+}
+
+async function syncAssignmentParts(client: PoolClient, assignmentId: string, parts: AssignmentPartInput[]): Promise<SyncedAssignmentPart[]> {
+  const existing = await client.query<{ id: string; submission_count: number }>(
+    `
+      select ap.id, count(si.id)::int as submission_count
+      from assignment_parts ap
+      left join submission_items si on si.assignment_part_id = ap.id
+      where ap.assignment_id = $1
+      group by ap.id
+    `,
+    [assignmentId],
+  );
+  const existingById = new Map(existing.rows.map((row) => [row.id, row]));
+  const nextIds = new Set<string>();
+  const syncedParts: SyncedAssignmentPart[] = [];
+
+  await client.query(
+    "update assignment_parts set order_index = -1000 - order_index where assignment_id = $1 and status = 'active'",
+    [assignmentId],
+  );
+
+  for (const [index, part] of parts.entries()) {
+    const partId = part.id && existingById.has(part.id) ? part.id : `assignment-part-${randomUUID()}`;
+    nextIds.add(partId);
+    syncedParts.push({ id: partId, orderIndex: index });
+    const maxSubmissionCount = Math.max(part.maxSubmissionCount, part.minSubmissionCount, 1);
+    await client.query(
+      `
+        insert into assignment_parts (
+          id, assignment_id, part_type, title, instruction, script_text,
+          writing_mode, writing_unit, writing_hint, writing_example,
+          is_required, allow_submission, min_submission_count, max_submission_count,
+          order_index, status, archived_at, archived_reason
+        )
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'active', null, null)
+        on conflict (id)
+        do update set
+          part_type = excluded.part_type,
+          title = excluded.title,
+          instruction = excluded.instruction,
+          script_text = excluded.script_text,
+          writing_mode = excluded.writing_mode,
+          writing_unit = excluded.writing_unit,
+          writing_hint = excluded.writing_hint,
+          writing_example = excluded.writing_example,
+          is_required = excluded.is_required,
+          allow_submission = excluded.allow_submission,
+          min_submission_count = excluded.min_submission_count,
+          max_submission_count = excluded.max_submission_count,
+          order_index = excluded.order_index,
+          status = 'active',
+          archived_at = null,
+          archived_reason = null,
+          updated_at = now()
+      `,
+      [
+        partId,
+        assignmentId,
+        part.partType,
+        part.title || null,
+        part.instruction || null,
+        part.scriptText || null,
+        part.partType === "writing" && (part.writingMode === "picture_description" || part.writingMode === "topic_diary") ? part.writingMode : null,
+        part.partType === "writing" && (part.writingUnit === "paragraphs" || part.writingUnit === "sentences") ? part.writingUnit : null,
+        part.partType === "writing" ? part.writingHint || null : null,
+        part.partType === "writing" ? part.writingExample || null : null,
+        part.isRequired,
+        part.allowSubmission,
+        part.minSubmissionCount,
+        maxSubmissionCount,
+        index,
+      ],
+    );
+  }
+
+  for (const row of existing.rows) {
+    if (nextIds.has(row.id)) continue;
+    if (row.submission_count > 0) {
+      await client.query(
+        `
+          update assignment_parts
+          set status = 'archived',
+              archived_at = coalesce(archived_at, now()),
+              archived_reason = 'removed_after_submission',
+              updated_at = now()
+          where id = $1
+        `,
+        [row.id],
+      );
+    } else {
+      await client.query("delete from assignment_parts where id = $1", [row.id]);
+    }
+  }
+
+  return syncedParts;
+}
+
+async function syncAssignmentPartFiles(
+  client: PoolClient,
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  assignmentId: string,
+  parts: SyncedAssignmentPart[],
+  filesByIndex: PartFilesByIndex,
+) {
+  for (const part of parts) {
+    const files = filesByIndex.get(part.orderIndex);
+    if (!files) continue;
+    if (files.imageFiles.length > 0) {
+      await replacePartAttachments(client, supabase, assignmentId, part.id, "image", files.imageFiles);
+    }
+    if (files.audioFiles.length > 0) {
+      await replacePartAttachments(client, supabase, assignmentId, part.id, "audio", files.audioFiles);
+    }
+  }
+}
+
+async function syncAssignmentPartVocabularyItems(
+  client: PoolClient,
+  assignmentId: string,
+  syncedParts: SyncedAssignmentPart[],
+  parts: AssignmentPartInput[],
+  legacyVocabularyItems: Array<{ word: string; meaning: string; orderIndex: number }>,
+) {
+  await client.query("delete from assignment_vocabulary_items where assignment_id = $1", [assignmentId]);
+
+  let insertedCount = 0;
+  for (const syncedPart of syncedParts) {
+    const part = parts[syncedPart.orderIndex];
+    if (!part || (part.partType !== "vocabulary_example" && part.partType !== "vocabulary_recording")) continue;
+
+    const rows = (part.vocabularyRows?.length ? part.vocabularyRows : legacyVocabularyItems)
+      .map((item, index) => ({
+        word: item.word.trim(),
+        meaning: item.meaning.trim(),
+        orderIndex: index,
+      }))
+      .filter((item) => item.word && item.meaning)
+      .slice(0, 200);
+
+    for (const item of rows) {
+      await client.query(
+        `
+          insert into assignment_vocabulary_items (id, assignment_id, assignment_part_id, word, meaning, order_index)
+          values ($1, $2, $3, $4, $5, $6)
+        `,
+        [`assignment-vocab-${randomUUID()}`, assignmentId, syncedPart.id, item.word, item.meaning, item.orderIndex],
+      );
+      insertedCount += 1;
+    }
+  }
+
+  return insertedCount;
+}
+
+async function replacePartAttachments(
+  client: PoolClient,
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  assignmentId: string,
+  partId: string,
+  attachmentType: "image" | "audio",
+  files: File[],
+) {
+  const bucket = attachmentType === "image" ? storageBuckets.images : storageBuckets.audio;
+  const maxFileSize = attachmentType === "image" ? MAX_IMAGE_FILE_SIZE : MAX_AUDIO_FILE_SIZE;
+  const isValidFile = attachmentType === "image" ? isImageFile : isAudioFile;
+
+  for (const file of files) {
+    if (!isValidFile(file)) {
+      throw new Error(attachmentType === "image" ? "Part에는 이미지 파일만 업로드할 수 있습니다." : "Part에는 오디오 파일만 업로드할 수 있습니다.");
+    }
+    if (file.size > maxFileSize) {
+      throw new Error(attachmentType === "image" ? "Part 이미지 파일은 1개당 최대 10MB까지 업로드할 수 있습니다." : "Part 오디오 파일은 1개당 최대 20MB까지 업로드할 수 있습니다.");
+    }
+  }
+
+  await ensureStorageBucket(supabase, bucket, {
+    fileSizeLimit: maxFileSize,
+    allowedMimeTypes: attachmentType === "image" ? ["image/*"] : ["audio/*", "application/octet-stream"],
+  });
+
+  const existing = await client.query<{ storage_path: string }>(
+    "select storage_path from assignment_part_attachments where assignment_part_id = $1 and attachment_type = $2",
+    [partId, attachmentType],
+  );
+
+  if (existing.rows.length > 0) {
+    const { error } = await supabase.storage.from(bucket).remove(existing.rows.map((row) => row.storage_path));
+    if (error) console.error(error);
+  }
+
+  await client.query(
+    "delete from assignment_part_attachments where assignment_part_id = $1 and attachment_type = $2",
+    [partId, attachmentType],
+  );
+
+  for (const [index, file] of files.entries()) {
+    const fileName = safeFileName(file.name);
+    const storagePath = `assignments/${assignmentId}/parts/${partId}/${attachmentType}/${index + 1}-${Date.now()}-${fileName}`;
+    const upload = await supabase.storage.from(bucket).upload(
+      storagePath,
+      Buffer.from(await file.arrayBuffer()),
+      { contentType: file.type || (attachmentType === "image" ? "image/png" : "audio/mpeg"), upsert: true },
+    );
+
+    if (upload.error) {
+      throw new Error(`${attachmentType === "image" ? "Part 이미지" : "Part 오디오"} 업로드 실패: ${upload.error.message}`);
+    }
+
+    const publicUrl = supabase.storage.from(bucket).getPublicUrl(storagePath).data.publicUrl;
+    await client.query(
+      `
+        insert into assignment_part_attachments (
+          id, assignment_part_id, attachment_type, storage_bucket, storage_path,
+          file_url, file_name, mime_type, file_size_bytes, order_index
+        )
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `,
+      [
+        `assignment-part-attachment-${randomUUID()}`,
+        partId,
+        attachmentType,
+        bucket,
+        storagePath,
+        publicUrl,
+        fileName,
+        file.type || (attachmentType === "image" ? "image/png" : "audio/mpeg"),
+        file.size,
+        index,
+      ],
+    );
   }
 }
 

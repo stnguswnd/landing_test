@@ -3,14 +3,16 @@ export type AssignmentType =
   | "listening"
   | "writing"
   | "vocabulary_example"
-  | "vocabulary_recording";
+  | "vocabulary_recording"
+  | "photo_submission";
 
 export type AssignmentItemType =
   | "listening_recording"
   | "listening"
   | "writing_prompt"
   | "vocabulary_example"
-  | "vocabulary_recording";
+  | "vocabulary_recording"
+  | "photo_submission";
 
 export type WritingMode = "picture_description" | "topic_diary";
 
@@ -18,7 +20,14 @@ export type WritingUnit = "paragraphs" | "sentences";
 
 export type AssignmentSubject = string;
 
-const SUPPORTED_ASSIGNMENT_TYPES = ["listening_recording", "listening", "writing", "vocabulary_example", "vocabulary_recording"] as const;
+const SUPPORTED_ASSIGNMENT_TYPES = [
+  "listening_recording",
+  "listening",
+  "writing",
+  "vocabulary_example",
+  "vocabulary_recording",
+  "photo_submission",
+] as const;
 
 const LEGACY_ASSIGNMENT_TYPES = [
   "image_speaking",
@@ -46,6 +55,7 @@ export function assignmentTypeLabel(value: string | null | undefined) {
   const type = normalizeAssignmentType(value);
   if (type === "vocabulary_example") return "단어장 예문";
   if (type === "vocabulary_recording") return "단어장 녹음";
+  if (type === "photo_submission") return "사진 제출";
   if (type === "writing") return "라이팅";
   if (type === "listening") return "리스닝";
   return "RL 녹음";
@@ -67,6 +77,7 @@ export function itemTypeForAssignmentType(value: string | null | undefined): Ass
   const type = normalizeAssignmentType(value);
   if (type === "vocabulary_example") return "vocabulary_example";
   if (type === "vocabulary_recording") return "vocabulary_recording";
+  if (type === "photo_submission") return "photo_submission";
   if (type === "writing") return "writing_prompt";
   return type;
 }
@@ -80,7 +91,8 @@ export function normalizeAssignmentItemType(
     itemType === "listening_recording" ||
     itemType === "writing_prompt" ||
     itemType === "vocabulary_example" ||
-    itemType === "vocabulary_recording"
+    itemType === "vocabulary_recording" ||
+    itemType === "photo_submission"
   ) return itemType;
   return itemTypeForAssignmentType(assignmentType);
 }

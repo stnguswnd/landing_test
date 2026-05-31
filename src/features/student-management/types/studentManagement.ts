@@ -24,12 +24,14 @@ export type StudentLearningHistory = {
   studentId: string;
   date: string;
   assignmentTitle: string;
-  assignmentType: "listening_recording" | "listening" | "writing" | "vocabulary_example" | "vocabulary_recording";
+  assignmentType: "listening_recording" | "listening" | "writing" | "vocabulary_example" | "vocabulary_recording" | "photo_submission";
   className?: string;
   submitStatus: "submitted" | "not_submitted" | "late";
   score?: number | null;
   reviewStatus: "pending" | "reviewed" | "none";
   detailHref?: string;
+  submissionId?: string;
+  assignmentTargetId?: string;
 };
 
 export type StudentManagementTab = "detail" | "learning";
