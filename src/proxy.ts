@@ -10,7 +10,7 @@ export function proxy(request: NextRequest) {
   const studentSessionId = request.cookies.get(studentSessionCookieName)?.value;
   const role = request.cookies.get(roleCookieName)?.value;
 
-  if (pathname.startsWith("/login") && (sessionId || studentSessionId)) {
+  if ((pathname === "/" || pathname.startsWith("/login") || pathname.startsWith("/signup")) && (sessionId || studentSessionId)) {
     return NextResponse.redirect(new URL(role === "teacher" ? "/teacher/dashboard" : "/student/home", request.url));
   }
 
@@ -44,5 +44,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/login", "/signup", "/teacher/:path*", "/student/:path*", "/api/teacher/:path*"],
+  matcher: ["/", "/login", "/signup", "/teacher/:path*", "/student/:path*", "/api/teacher/:path*"],
 };
