@@ -600,6 +600,9 @@ function GlobalNoticeSection() {
                   </div>
                   <h3 className="mt-2 font-bold">{notice.title}</h3>
                   <p className="mt-1 text-sm text-slate-600">{notice.content}</p>
+                  {notice.imageUrl && (
+                    <img src={notice.imageUrl} alt="공지 이미지" className="mt-3 max-h-48 rounded-md border border-line object-contain" />
+                  )}
                   <p className="mt-2 text-xs font-semibold text-slate-400">{notice.publishedAt ?? notice.createdAt}</p>
                 </div>
                 <div className="flex gap-2">
@@ -629,18 +632,37 @@ function GlobalNoticeSection() {
 function NoticeFormModal({ notice, onClose, onSaved }: { notice: Notice | null; onClose: () => void; onSaved: () => void }) {
   const [title, setTitle] = useState(notice?.title ?? "");
   const [content, setContent] = useState(notice?.content ?? "");
-  const [imageUrl, setImageUrl] = useState(notice?.imageUrl ?? "");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState(notice?.imageUrl ?? "");
   const [status, setStatus] = useState(notice?.status ?? "published");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
 
+  useEffect(() => {
+    return () => {
+      if (imagePreviewUrl.startsWith("blob:")) URL.revokeObjectURL(imagePreviewUrl);
+    };
+  }, [imagePreviewUrl]);
+
+  function selectImage(files: FileList | null) {
+    const file = files?.[0] ?? null;
+    if (imagePreviewUrl.startsWith("blob:")) URL.revokeObjectURL(imagePreviewUrl);
+    setImageFile(file);
+    setImagePreviewUrl(file ? URL.createObjectURL(file) : notice?.imageUrl ?? "");
+  }
+
   function save() {
     setError("");
     startTransition(async () => {
+      const formData = new FormData();
+      formData.set("title", title);
+      formData.set("content", content);
+      formData.set("status", status);
+      formData.set("currentImageUrl", notice?.imageUrl ?? "");
+      if (imageFile) formData.set("imageFile", imageFile, imageFile.name);
       const response = await fetch(notice ? `/api/teacher/notices/${notice.id}` : "/api/teacher/notices/global", {
         method: notice ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, content, imageUrl: imageUrl || null, status }),
+        body: formData,
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -664,8 +686,11 @@ function NoticeFormModal({ notice, onClose, onSaved }: { notice: Notice | null; 
           <Textarea value={content} onChange={(event) => setContent(event.target.value)} />
         </label>
         <label className="grid gap-2 text-sm font-semibold">
-          이미지 URL
-          <Input value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} placeholder="선택 사항" />
+          이미지 업로드
+          <Input type="file" accept="image/*" onChange={(event) => selectImage(event.target.files)} />
+          {imagePreviewUrl && (
+            <img src={imagePreviewUrl} alt="공지 이미지 미리보기" className="max-h-56 w-full rounded-md border border-line object-contain" />
+          )}
         </label>
         <label className="grid gap-2 text-sm font-semibold">
           공개 상태
