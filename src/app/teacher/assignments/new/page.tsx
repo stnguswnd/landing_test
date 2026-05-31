@@ -108,6 +108,13 @@ function defaultVocabularyRows(): VocabularyRow[] {
   ];
 }
 
+function validVocabularyRows(rows: VocabularyRow[]) {
+  return rows
+    .map((row) => ({ word: row.word.trim(), meaning: row.meaning.trim() }))
+    .filter((row) => row.word && row.meaning)
+    .slice(0, 200);
+}
+
 function partFieldCopy(type: AssignmentPartType) {
   if (type === "listening") {
     return {
@@ -261,6 +268,61 @@ function emptyTemplate(): TemplateState {
   };
 }
 
+function SelectedFilePreview({ kind, file }: { kind: "image" | "audio"; file: File }) {
+  const [url, setUrl] = useState("");
+
+  useEffect(() => {
+    const objectUrl = URL.createObjectURL(file);
+    setUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [file]);
+
+  return (
+    <div className="grid gap-2 rounded-md border border-line bg-white p-2">
+      {kind === "image" && url && (
+        <img
+          src={url}
+          alt={file.name}
+          className="h-36 w-full rounded-md border border-line object-contain"
+        />
+      )}
+      {kind === "audio" && url && (
+        <audio controls src={url} className="w-full" />
+      )}
+      <p className="truncate text-xs font-semibold text-slate-700">{file.name}</p>
+    </div>
+  );
+}
+
+function AttachmentPreview({ kind, attachment }: { kind: "image" | "audio"; attachment: AssignmentPartAttachmentState }) {
+  const fileName = attachment.fileName || "파일 열기";
+  const fileUrl = attachment.fileUrl || "";
+
+  return (
+    <div className="grid gap-2 rounded-md border border-line bg-white p-2">
+      {kind === "image" && fileUrl && (
+        <a href={fileUrl} target="_blank" rel="noreferrer" aria-label={`${fileName} 새 창으로 열기`}>
+          <img
+            src={fileUrl}
+            alt={fileName}
+            className="h-36 w-full rounded-md border border-line object-contain"
+          />
+        </a>
+      )}
+      {kind === "audio" && fileUrl && (
+        <audio controls src={fileUrl} className="w-full" />
+      )}
+      {fileUrl ? (
+        <a href={fileUrl} target="_blank" rel="noreferrer" className="truncate text-xs font-semibold text-action underline-offset-2 hover:underline">
+          {fileName}
+        </a>
+      ) : (
+        <p className="truncate text-xs font-semibold text-slate-700">{fileName}</p>
+      )}
+    </div>
+  );
+}
+
 function PartFileSummary({
   kind,
   selectedFiles,
@@ -272,9 +334,13 @@ function PartFileSummary({
 }) {
   if (selectedFiles.length > 0) {
     return (
-      <div className="grid gap-2 rounded-md border border-line bg-white p-3 text-xs text-slate-600">
+      <div className="grid gap-3 rounded-md border border-line bg-slate-50 p-3 text-xs text-slate-600">
         <p className="font-bold text-slate-700">새로 선택한 파일 {selectedFiles.length}개</p>
-        {selectedFiles.map((file) => <p key={`${file.name}-${file.size}`} className="truncate font-semibold">{file.name}</p>)}
+        <div className="grid gap-2">
+          {selectedFiles.map((file) => (
+            <SelectedFilePreview key={`${file.name}-${file.size}-${file.lastModified}`} kind={kind} file={file} />
+          ))}
+        </div>
         {attachments.length > 0 && <p className="text-slate-500">저장하면 기존 {kind === "image" ? "이미지" : "오디오"} 파일을 교체합니다.</p>}
       </div>
     );
@@ -285,13 +351,13 @@ function PartFileSummary({
   }
 
   return (
-    <div className="grid gap-2 rounded-md border border-line bg-white p-3 text-xs text-slate-600">
+    <div className="grid gap-3 rounded-md border border-line bg-slate-50 p-3 text-xs text-slate-600">
       <p className="font-bold text-slate-700">저장된 파일 {attachments.length}개</p>
-      {attachments.map((attachment) => (
-        <a key={attachment.id} href={attachment.fileUrl} target="_blank" rel="noreferrer" className="truncate font-semibold text-action underline-offset-2 hover:underline">
-          {attachment.fileName || "파일 열기"}
-        </a>
-      ))}
+      <div className="grid gap-2">
+        {attachments.map((attachment) => (
+          <AttachmentPreview key={attachment.id} kind={kind} attachment={attachment} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -316,6 +382,63 @@ function SaveAlertModal({
       </div>
     </div>
   );
+}
+
+function responseErrorMessage(data: unknown) {
+  const fallback = "입력한 내용을 확인한 뒤 다시 시도해주세요.";
+  if (!data || typeof data !== "object") return fallback;
+  const error = (data as { error?: unknown }).error;
+  if (typeof error === "string") return error.trim() || fallback;
+  if (Array.isArray(error)) {
+    const messages = error.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+    return messages.length > 0 ? messages.join("\n") : fallback;
+  }
+  return fallback;
+}
+
+function hasAttachment(part: AssignmentPartState, kind: "image" | "audio") {
+  return part.attachments.some((attachment) => attachment.attachmentType === kind);
+}
+
+function validatePart(part: AssignmentPartState, index: number) {
+  const partName = part.title.trim() || `Part ${index + 1}`;
+  const prefix = `${partName}(${partTypeLabel(part.partType)})`;
+  const minCount = Number(part.minSubmissionCount);
+  const maxCount = Number(part.maxSubmissionCount);
+
+  if (!part.title.trim()) return `${prefix}: Part 제목을 입력해주세요.`;
+  if (part.allowSubmission) {
+    if (!Number.isFinite(minCount) || minCount < 0) return `${prefix}: 최소 제출 수를 0 이상으로 입력해주세요.`;
+    if (!Number.isFinite(maxCount) || maxCount < 1) return `${prefix}: 최대 제출 수를 1 이상으로 입력해주세요.`;
+    if (minCount > maxCount) return `${prefix}: 최소 제출 수는 최대 제출 수보다 클 수 없습니다.`;
+  }
+
+  if (part.partType === "listening" && part.audioFiles.length === 0 && !hasAttachment(part, "audio")) {
+    return `${prefix}: 학생이 들을 오디오 파일을 업로드해주세요.`;
+  }
+  if (part.partType === "recording" && !part.scriptText.trim() && part.audioFiles.length === 0 && !hasAttachment(part, "audio")) {
+    return `${prefix}: 읽고 녹음할 문장 또는 따라 말할 오디오 파일을 입력해주세요.`;
+  }
+  if (part.partType === "writing" && !part.scriptText.trim()) {
+    return `${prefix}: 라이팅 주제 / 프롬프트를 입력해주세요.`;
+  }
+  if (part.partType === "photo_submission" && !part.instruction.trim() && !part.scriptText.trim()) {
+    return `${prefix}: 사진 제출 안내 또는 사진 설명을 입력해주세요.`;
+  }
+  if ((part.partType === "vocabulary_example" || part.partType === "vocabulary_recording") && validVocabularyRows(part.vocabularyRows).length === 0) {
+    return `${prefix}: 단어와 뜻이 입력된 항목을 1개 이상 추가해주세요.`;
+  }
+
+  return null;
+}
+
+function validateTemplate(template: TemplateState) {
+  if (!template.title.trim()) return "숙제 제목을 입력해주세요.";
+  for (let index = 0; index < template.parts.length; index += 1) {
+    const partError = validatePart(template.parts[index], index);
+    if (partError) return partError;
+  }
+  return null;
 }
 
 export default function NewAssignmentPage() {
@@ -421,13 +544,6 @@ function NewAssignmentForm() {
     };
   }, [routeAssignmentId]);
 
-  function validVocabularyRows(rows: VocabularyRow[]) {
-    return rows
-      .map((row) => ({ word: row.word.trim(), meaning: row.meaning.trim() }))
-      .filter((row) => row.word && row.meaning)
-      .slice(0, 200);
-  }
-
   function addPart() {
     setTemplate((current) => ({
       ...current,
@@ -493,10 +609,11 @@ function NewAssignmentForm() {
   }
 
   function saveAssignment() {
-    if (!template.title.trim()) {
+    const validationError = validateTemplate(template);
+    if (validationError) {
       setAlert({
         title: "입력되지 않은 항목이 있습니다",
-        message: "숙제 제목을 입력해주세요.",
+        message: validationError,
       });
       return;
     }
@@ -564,7 +681,7 @@ function NewAssignmentForm() {
       if (!response.ok) {
         setAlert({
           title: "숙제를 저장하지 못했습니다",
-          message: data.error ?? "입력한 내용을 확인한 뒤 다시 시도해주세요.",
+          message: responseErrorMessage(data),
         });
         return;
       }
