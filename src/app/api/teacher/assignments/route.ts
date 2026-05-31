@@ -10,8 +10,8 @@ import { isSupportedAssignmentType, itemTypeForAssignmentType, normalizeAssignme
 
 export const runtime = "nodejs";
 
-const MAX_IMAGE_FILE_SIZE = 10 * 1024 * 1024;
-const MAX_AUDIO_FILE_SIZE = 20 * 1024 * 1024;
+const MAX_IMAGE_FILE_SIZE = 50 * 1024 * 1024;
+const MAX_AUDIO_FILE_SIZE = 50 * 1024 * 1024;
 
 type StorageBucketOptions = {
   fileSizeLimit: number;
@@ -648,7 +648,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "이미지 파일만 업로드할 수 있습니다." }, { status: 400 });
     }
     if (imageFile.size > MAX_IMAGE_FILE_SIZE) {
-      return NextResponse.json({ error: "이미지는 최대 10MB까지 업로드할 수 있습니다." }, { status: 400 });
+      return NextResponse.json({ error: "이미지는 최대 50MB까지 업로드할 수 있습니다." }, { status: 400 });
     }
     imageFileName = safeFileName(imageFile.name);
     imageStoragePath = `assignments/${id}/images/${imageFileName}`;
@@ -680,7 +680,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "오디오 파일만 업로드할 수 있습니다." }, { status: 400 });
     }
     if (audioFile.size > MAX_AUDIO_FILE_SIZE) {
-      return NextResponse.json({ error: "MP3 파일은 최대 20MB까지 업로드할 수 있습니다." }, { status: 400 });
+      return NextResponse.json({ error: "오디오 파일은 최대 50MB까지 업로드할 수 있습니다." }, { status: 400 });
     }
     audioFileName = safeFileName(audioFile.name);
     audioStoragePath = `assignments/${id}/audio/${audioFileName}`;
@@ -1299,7 +1299,7 @@ async function replacePartAttachments(
       throw new Error(attachmentType === "image" ? "Part에는 이미지 파일만 업로드할 수 있습니다." : "Part에는 오디오 파일만 업로드할 수 있습니다.");
     }
     if (file.size > maxFileSize) {
-      throw new Error(attachmentType === "image" ? "Part 이미지 파일은 1개당 최대 10MB까지 업로드할 수 있습니다." : "Part 오디오 파일은 1개당 최대 20MB까지 업로드할 수 있습니다.");
+      throw new Error(attachmentType === "image" ? "Part 이미지 파일은 1개당 최대 50MB까지 업로드할 수 있습니다." : "Part 오디오 파일은 1개당 최대 50MB까지 업로드할 수 있습니다.");
     }
   }
 

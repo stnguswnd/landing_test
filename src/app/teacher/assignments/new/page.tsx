@@ -51,6 +51,7 @@ type AssignmentPartAttachmentState = {
   attachmentType: "image" | "audio" | "video" | "file";
   fileName?: string;
   fileUrl?: string;
+  fileSizeBytes?: number;
   orderIndex: number;
 };
 
@@ -77,9 +78,9 @@ type TemplateState = {
 };
 
 const assignmentPartTypes: AssignmentPartType[] = ["recording", "listening", "writing", "vocabulary_example", "vocabulary_recording", "photo_submission"];
-const MAX_IMAGE_FILE_BYTES = 10 * 1024 * 1024;
-const MAX_AUDIO_FILE_BYTES = 20 * 1024 * 1024;
-const MAX_ASSIGNMENT_UPLOAD_BYTES = 4 * 1024 * 1024;
+const MAX_IMAGE_FILE_BYTES = 50 * 1024 * 1024;
+const MAX_AUDIO_FILE_BYTES = 50 * 1024 * 1024;
+const MAX_ASSIGNMENT_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 function partTypeLabel(type: AssignmentPartType) {
   if (type === "instruction") return "설명";
@@ -298,7 +299,10 @@ function SelectedFilePreview({ kind, file }: { kind: "image" | "audio"; file: Fi
       {kind === "audio" && url && (
         <audio controls src={url} className="w-full" />
       )}
-      <p className="truncate text-xs font-semibold text-slate-700">{file.name}</p>
+      <div className="min-w-0">
+        <p className="truncate text-xs font-semibold text-slate-700">{file.name}</p>
+        <p className="text-xs font-semibold text-slate-500">{formatFileSize(file.size)}</p>
+      </div>
     </div>
   );
 }
@@ -306,6 +310,7 @@ function SelectedFilePreview({ kind, file }: { kind: "image" | "audio"; file: Fi
 function AttachmentPreview({ kind, attachment }: { kind: "image" | "audio"; attachment: AssignmentPartAttachmentState }) {
   const fileName = attachment.fileName || "파일 열기";
   const fileUrl = attachment.fileUrl || "";
+  const fileSize = typeof attachment.fileSizeBytes === "number" ? formatFileSize(attachment.fileSizeBytes) : "";
 
   return (
     <div className="grid gap-2 rounded-md border border-line bg-white p-2">
@@ -328,6 +333,7 @@ function AttachmentPreview({ kind, attachment }: { kind: "image" | "audio"; atta
       ) : (
         <p className="truncate text-xs font-semibold text-slate-700">{fileName}</p>
       )}
+      {fileSize && <p className="text-xs font-semibold text-slate-500">{fileSize}</p>}
     </div>
   );
 }
@@ -341,10 +347,13 @@ function PartFileSummary({
   selectedFiles: File[];
   attachments: AssignmentPartAttachmentState[];
 }) {
+  const selectedTotalBytes = selectedFiles.reduce((sum, file) => sum + file.size, 0);
+  const savedTotalBytes = attachments.reduce((sum, attachment) => sum + (attachment.fileSizeBytes ?? 0), 0);
+
   if (selectedFiles.length > 0) {
     return (
       <div className="grid gap-3 rounded-md border border-line bg-slate-50 p-3 text-xs text-slate-600">
-        <p className="font-bold text-slate-700">새로 선택한 파일 {selectedFiles.length}개</p>
+        <p className="font-bold text-slate-700">새로 선택한 파일 {selectedFiles.length}개 · 총 {formatFileSize(selectedTotalBytes)}</p>
         <div className="grid gap-2">
           {selectedFiles.map((file) => (
             <SelectedFilePreview key={`${file.name}-${file.size}-${file.lastModified}`} kind={kind} file={file} />
@@ -361,7 +370,9 @@ function PartFileSummary({
 
   return (
     <div className="grid gap-3 rounded-md border border-line bg-slate-50 p-3 text-xs text-slate-600">
-      <p className="font-bold text-slate-700">저장된 파일 {attachments.length}개</p>
+      <p className="font-bold text-slate-700">
+        저장된 파일 {attachments.length}개{savedTotalBytes > 0 ? ` · 총 ${formatFileSize(savedTotalBytes)}` : ""}
+      </p>
       <div className="grid gap-2">
         {attachments.map((attachment) => (
           <AttachmentPreview key={attachment.id} kind={kind} attachment={attachment} />

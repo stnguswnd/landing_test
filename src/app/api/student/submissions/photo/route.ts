@@ -8,7 +8,7 @@ import { requireStudentSession } from "@/server/auth/studentSession";
 
 export const runtime = "nodejs";
 
-const MAX_IMAGE_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_IMAGE_FILE_SIZE = 50 * 1024 * 1024;
 const MAX_PHOTO_COUNT = 20;
 
 type TargetRow = {
@@ -60,7 +60,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "이미지 파일만 제출할 수 있습니다." }, { status: 400 });
     }
     if (file.size > MAX_IMAGE_FILE_SIZE) {
-      return NextResponse.json({ error: "사진 1개당 최대 10MB까지 제출할 수 있습니다." }, { status: 400 });
+      return NextResponse.json({ error: "사진 1개당 최대 50MB까지 제출할 수 있습니다." }, { status: 400 });
     }
   }
 

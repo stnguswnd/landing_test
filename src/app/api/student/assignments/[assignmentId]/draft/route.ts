@@ -8,7 +8,7 @@ import { requireStudentSession } from "@/server/auth/studentSession";
 
 export const runtime = "nodejs";
 
-const MAX_IMAGE_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_IMAGE_FILE_SIZE = 50 * 1024 * 1024;
 const MAX_AUDIO_FILE_SIZE = 50 * 1024 * 1024;
 
 type TargetRow = {
@@ -181,7 +181,7 @@ export async function POST(
 
   for (const file of files) {
     if (file.size > maxFileSize(attachmentType)) {
-      return NextResponse.json({ error: attachmentType === "audio" ? "파일 1개당 최대 50MB까지 저장할 수 있습니다." : "사진 1개당 최대 10MB까지 저장할 수 있습니다." }, { status: 400 });
+      return NextResponse.json({ error: attachmentType === "audio" ? "파일 1개당 최대 50MB까지 저장할 수 있습니다." : "사진 1개당 최대 50MB까지 저장할 수 있습니다." }, { status: 400 });
     }
     if (attachmentType === "image" && !file.type.startsWith("image/")) {
       return NextResponse.json({ error: "이미지 파일만 저장할 수 있습니다." }, { status: 400 });
