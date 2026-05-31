@@ -140,7 +140,7 @@ export default function TeacherAssignmentPreviewPage() {
 }
 
 function partTypeLabel(type: string) {
-  if (type === "recording") return "RL 녹음";
+  if (type === "recording") return "듣고녹음하기";
   if (type === "listening") return "리스닝";
   if (type === "writing") return "라이팅";
   if (type === "photo_submission") return "사진 제출";

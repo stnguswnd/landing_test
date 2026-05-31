@@ -250,7 +250,7 @@ create table if not exists assignment_parts (
 | --- | --- |
 | `instruction` | 안내만 보여주는 Part. 현재 UI 선택 목록에서는 적극 사용하지 않음 |
 | `listening` | 듣기 완료형 Part |
-| `recording` | 듣고 따라 녹음하는 RL 녹음형 Part |
+| `recording` | 듣고 따라 녹음하는 듣고녹음하기 Part |
 | `writing` | 라이팅 작성 + AI 첨삭형 Part |
 | `photo_submission` | 사진 여러 장 제출형 Part |
 | `vocabulary_example` | 단어장 예문 작성형 Part |
@@ -1046,4 +1046,3 @@ where attachment_type = 'audio';
 - 향후 녹음 파일 여러 개 제출 확장
 - AI 첨삭 3회 제한
 - 강사가 학생 제출 이력만 삭제하고 배정은 유지하는 운영 흐름
-

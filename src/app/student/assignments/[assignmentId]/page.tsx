@@ -32,7 +32,7 @@ function layoutTitle(assignment: Assignment) {
   if (assignmentType === "writing") return "라이팅 숙제";
   if (assignmentType === "vocabulary_example") return "단어장 예문 숙제";
   if (assignmentType === "vocabulary_recording") return "단어장 녹음 숙제";
-  return "RL 녹음 숙제";
+  return "듣고녹음하기 숙제";
 }
 
 export default async function StudentAssignmentPage({

@@ -61,7 +61,7 @@ type TargetSelection = {
 };
 
 function typeLabel(type: string) {
-  if (type === "recording") return "RL 녹음";
+  if (type === "recording") return "듣고녹음하기";
   if (type === "photo_submission") return "사진 제출";
   if (type === "vocabulary_example") return "단어장 예문";
   if (type === "vocabulary_recording") return "단어장 녹음";

@@ -151,7 +151,7 @@ function ClassCreateModal({
         <form action={onSubmit} className="grid gap-4">
           <label className="grid gap-2 text-sm font-semibold">
             반 이름
-            <Input name="name" required placeholder="예: RL Basic" />
+            <Input name="name" required placeholder="예: Basic" />
           </label>
           <label className="grid gap-2 text-sm font-semibold">
             설명

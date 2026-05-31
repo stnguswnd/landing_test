@@ -28,7 +28,7 @@ function Header({ assignment }: { assignment: Assignment }) {
     <Card className="shadow-soft">
       <div className="flex flex-wrap gap-2">
         <Badge tone="blue">{assignment.classId || "내 반"}</Badge>
-        <Badge tone="green">RL 녹음</Badge>
+        <Badge tone="green">듣고녹음하기</Badge>
         {assignment.dueAt && <Badge tone="yellow">마감: {formatDue(assignment.dueAt)}</Badge>}
         {assignment.submittedAt && <Badge tone="green">제출: {formatDateTime(assignment.submittedAt)}</Badge>}
       </div>

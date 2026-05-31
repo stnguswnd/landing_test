@@ -58,7 +58,7 @@ export function assignmentTypeLabel(value: string | null | undefined) {
   if (type === "photo_submission") return "사진 제출";
   if (type === "writing") return "라이팅";
   if (type === "listening") return "리스닝";
-  return "RL 녹음";
+  return "듣고녹음하기";
 }
 
 export function assignmentSubjectLabel(value: string | null | undefined) {

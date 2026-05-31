@@ -81,7 +81,7 @@ const assignmentPartTypes: AssignmentPartType[] = ["recording", "listening", "wr
 function partTypeLabel(type: AssignmentPartType) {
   if (type === "instruction") return "설명";
   if (type === "listening") return "리스닝";
-  if (type === "recording") return "RL 녹음";
+  if (type === "recording") return "듣고녹음하기";
   if (type === "writing") return "라이팅";
   if (type === "photo_submission") return "사진 제출";
   if (type === "vocabulary_example") return "단어장 예문";
@@ -125,7 +125,7 @@ function partFieldCopy(type: AssignmentPartType) {
       scriptLabel: "읽고 녹음할 문장",
       imageLabel: "참고 이미지",
       audioLabel: "따라 말할 오디오 파일",
-      helper: "기존 RL 녹음 숙제처럼 학생이 듣고 녹음합니다.",
+      helper: "기존 듣고녹음하기 숙제처럼 학생이 듣고 녹음합니다.",
       submitLabel: "녹음 파일 수",
     };
   }
