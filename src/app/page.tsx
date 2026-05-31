@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 import { Contact } from "@/components/landing/contact";
 import { Curriculum } from "@/components/landing/curriculum";
@@ -14,6 +16,9 @@ import { contact } from "@/content/landing";
 import { absoluteUrl, siteConfig } from "@/lib/seo";
 
 const ogImageUrl = absoluteUrl(siteConfig.ogImage);
+const sessionCookieName = "homework_session";
+const studentSessionCookieName = "homework_student_session";
+const roleCookieName = "homework_role";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
@@ -62,7 +67,15 @@ export const metadata: Metadata = {
   },
 };
 
-export default function HomePage() {
+export default async function HomePage() {
+  const cookieStore = await cookies();
+  const sessionId = cookieStore.get(sessionCookieName)?.value;
+  const studentSessionId = cookieStore.get(studentSessionCookieName)?.value;
+  const role = cookieStore.get(roleCookieName)?.value;
+
+  if (studentSessionId || role === "student") redirect("/student/home");
+  if (sessionId || role === "teacher") redirect("/teacher/dashboard");
+
   const schema = {
     "@context": "https://schema.org",
     "@type": "EducationalOrganization",

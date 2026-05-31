@@ -77,6 +77,9 @@ type TemplateState = {
 };
 
 const assignmentPartTypes: AssignmentPartType[] = ["recording", "listening", "writing", "vocabulary_example", "vocabulary_recording", "photo_submission"];
+const MAX_IMAGE_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_AUDIO_FILE_BYTES = 20 * 1024 * 1024;
+const MAX_ASSIGNMENT_UPLOAD_BYTES = 4 * 1024 * 1024;
 
 function partTypeLabel(type: AssignmentPartType) {
   if (type === "instruction") return "설명";
@@ -113,6 +116,12 @@ function validVocabularyRows(rows: VocabularyRow[]) {
     .map((row) => ({ word: row.word.trim(), meaning: row.meaning.trim() }))
     .filter((row) => row.word && row.meaning)
     .slice(0, 200);
+}
+
+function formatFileSize(bytes: number) {
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+  if (bytes >= 1024) return `${Math.ceil(bytes / 1024)}KB`;
+  return `${bytes}B`;
 }
 
 function partFieldCopy(type: AssignmentPartType) {
@@ -441,6 +450,34 @@ function validateTemplate(template: TemplateState) {
   return null;
 }
 
+function validateUploadSize(template: TemplateState) {
+  let totalBytes = 0;
+
+  for (const [index, part] of template.parts.entries()) {
+    const partName = part.title.trim() || `Part ${index + 1}`;
+
+    for (const file of part.imageFiles) {
+      totalBytes += file.size;
+      if (file.size > MAX_IMAGE_FILE_BYTES) {
+        return `${partName}: 이미지 파일 "${file.name}"의 용량이 ${formatFileSize(file.size)}입니다.\n이미지는 1개당 최대 ${formatFileSize(MAX_IMAGE_FILE_BYTES)}까지 업로드할 수 있습니다.`;
+      }
+    }
+
+    for (const file of part.audioFiles) {
+      totalBytes += file.size;
+      if (file.size > MAX_AUDIO_FILE_BYTES) {
+        return `${partName}: 오디오 파일 "${file.name}"의 용량이 ${formatFileSize(file.size)}입니다.\n오디오는 1개당 최대 ${formatFileSize(MAX_AUDIO_FILE_BYTES)}까지 업로드할 수 있습니다.`;
+      }
+    }
+  }
+
+  if (totalBytes > MAX_ASSIGNMENT_UPLOAD_BYTES) {
+    return `첨부 파일 총 용량이 너무 큽니다.\n현재 선택한 파일 합계: ${formatFileSize(totalBytes)}\n한 번에 저장 가능한 권장 용량: ${formatFileSize(MAX_ASSIGNMENT_UPLOAD_BYTES)} 이하\n\n이미지나 오디오를 압축하거나, 파일 개수를 줄인 뒤 다시 저장해주세요.`;
+  }
+
+  return null;
+}
+
 export default function NewAssignmentPage() {
   return (
     <Suspense fallback={<TeacherLayout title="숙제 생성"><Card><p className="text-sm text-slate-500">숙제 작성 화면을 불러오는 중입니다.</p></Card></TeacherLayout>}>
@@ -614,6 +651,14 @@ function NewAssignmentForm() {
       setAlert({
         title: "입력되지 않은 항목이 있습니다",
         message: validationError,
+      });
+      return;
+    }
+    const uploadSizeError = validateUploadSize(template);
+    if (uploadSizeError) {
+      setAlert({
+        title: "첨부 파일 용량이 너무 큽니다",
+        message: uploadSizeError,
       });
       return;
     }
