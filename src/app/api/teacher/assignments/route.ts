@@ -12,6 +12,8 @@ export const runtime = "nodejs";
 
 const MAX_IMAGE_FILE_SIZE = 50 * 1024 * 1024;
 const MAX_AUDIO_FILE_SIZE = 50 * 1024 * 1024;
+const SUPPORTED_IMAGE_EXTENSIONS = "png, jpg, jpeg, gif, webp, heic, heif, bmp, tif, tiff, svg";
+const SUPPORTED_AUDIO_EXTENSIONS = "mp3, m4a, wav, webm, ogg, oga, aac, aif, aiff, caf, flac, amr";
 
 type StorageBucketOptions = {
   fileSizeLimit: number;
@@ -176,12 +178,48 @@ function safeFileName(fileName: string) {
   return fileName.replace(/[^a-zA-Z0-9._-]/g, "_") || `${randomUUID()}`;
 }
 
+function fileExtension(fileName: string) {
+  const match = fileName.toLowerCase().match(/\.([a-z0-9]+)$/);
+  return match?.[1] ?? "";
+}
+
+function fileDebugInfo(file: File) {
+  return `파일명: ${file.name}, 확장자: ${fileExtension(file.name) || "없음"}, 브라우저 파일 타입: ${file.type || "없음"}, 용량: ${(file.size / 1024 / 1024).toFixed(1)}MB`;
+}
+
 function isImageFile(file: File) {
-  return file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp)$/i.test(file.name);
+  return file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|heic|heif|bmp|tiff?|svg)$/i.test(file.name);
 }
 
 function isAudioFile(file: File) {
-  return file.type.startsWith("audio/") || /\.(mp3|m4a|wav|webm|ogg)$/i.test(file.name);
+  return file.type.startsWith("audio/") || /\.(mp3|m4a|wav|webm|ogg|oga|aac|aiff?|caf|flac|amr)$/i.test(file.name);
+}
+
+function imageContentType(file: File) {
+  if (file.type) return file.type;
+  if (/\.heic$/i.test(file.name)) return "image/heic";
+  if (/\.heif$/i.test(file.name)) return "image/heif";
+  if (/\.webp$/i.test(file.name)) return "image/webp";
+  if (/\.gif$/i.test(file.name)) return "image/gif";
+  if (/\.bmp$/i.test(file.name)) return "image/bmp";
+  if (/\.tiff?$/i.test(file.name)) return "image/tiff";
+  if (/\.svg$/i.test(file.name)) return "image/svg+xml";
+  if (/\.jpe?g$/i.test(file.name)) return "image/jpeg";
+  return "image/png";
+}
+
+function audioContentType(file: File) {
+  if (file.type) return file.type;
+  if (/\.m4a$/i.test(file.name)) return "audio/mp4";
+  if (/\.aac$/i.test(file.name)) return "audio/aac";
+  if (/\.wav$/i.test(file.name)) return "audio/wav";
+  if (/\.webm$/i.test(file.name)) return "audio/webm";
+  if (/\.og[ag]?$/i.test(file.name)) return "audio/ogg";
+  if (/\.aiff?$/i.test(file.name)) return "audio/aiff";
+  if (/\.caf$/i.test(file.name)) return "audio/x-caf";
+  if (/\.flac$/i.test(file.name)) return "audio/flac";
+  if (/\.amr$/i.test(file.name)) return "audio/amr";
+  return "audio/mpeg";
 }
 
 function storageErrorMessage(error: unknown) {
@@ -645,10 +683,10 @@ export async function POST(request: Request) {
 
   if (imageFile instanceof File) {
     if (!isImageFile(imageFile)) {
-      return NextResponse.json({ error: "이미지 파일만 업로드할 수 있습니다." }, { status: 400 });
+      return NextResponse.json({ error: `이미지 파일 형식을 확인해주세요.\n${fileDebugInfo(imageFile)}\n업로드 가능한 이미지 형식: ${SUPPORTED_IMAGE_EXTENSIONS}` }, { status: 400 });
     }
     if (imageFile.size > MAX_IMAGE_FILE_SIZE) {
-      return NextResponse.json({ error: "이미지는 최대 50MB까지 업로드할 수 있습니다." }, { status: 400 });
+      return NextResponse.json({ error: `이미지 파일 용량이 너무 큽니다.\n${fileDebugInfo(imageFile)}\n이미지는 1개당 최대 50MB까지 업로드할 수 있습니다.` }, { status: 400 });
     }
     imageFileName = safeFileName(imageFile.name);
     imageStoragePath = `assignments/${id}/images/${imageFileName}`;
@@ -664,7 +702,7 @@ export async function POST(request: Request) {
     const { error } = await supabase.storage.from(storageBuckets.images).upload(
       imageStoragePath,
       Buffer.from(await imageFile.arrayBuffer()),
-      { contentType: imageFile.type || "image/png", upsert: true },
+      { contentType: imageContentType(imageFile), upsert: true },
     );
 
     if (error) {
@@ -677,10 +715,10 @@ export async function POST(request: Request) {
 
   if (audioFile instanceof File) {
     if (!isAudioFile(audioFile)) {
-      return NextResponse.json({ error: "오디오 파일만 업로드할 수 있습니다." }, { status: 400 });
+      return NextResponse.json({ error: `오디오 파일 형식을 확인해주세요.\n${fileDebugInfo(audioFile)}\n업로드 가능한 오디오 형식: ${SUPPORTED_AUDIO_EXTENSIONS}` }, { status: 400 });
     }
     if (audioFile.size > MAX_AUDIO_FILE_SIZE) {
-      return NextResponse.json({ error: "오디오 파일은 최대 50MB까지 업로드할 수 있습니다." }, { status: 400 });
+      return NextResponse.json({ error: `오디오 파일 용량이 너무 큽니다.\n${fileDebugInfo(audioFile)}\n오디오는 1개당 최대 50MB까지 업로드할 수 있습니다.` }, { status: 400 });
     }
     audioFileName = safeFileName(audioFile.name);
     audioStoragePath = `assignments/${id}/audio/${audioFileName}`;
@@ -696,7 +734,7 @@ export async function POST(request: Request) {
     const { error } = await supabase.storage.from(storageBuckets.audio).upload(
       audioStoragePath,
       Buffer.from(await audioFile.arrayBuffer()),
-      { contentType: audioFile.type || "audio/mpeg", upsert: true },
+      { contentType: audioContentType(audioFile), upsert: true },
     );
 
     if (error) {
@@ -1296,10 +1334,14 @@ async function replacePartAttachments(
 
   for (const file of files) {
     if (!isValidFile(file)) {
-      throw new Error(attachmentType === "image" ? "Part에는 이미지 파일만 업로드할 수 있습니다." : "Part에는 오디오 파일만 업로드할 수 있습니다.");
+      throw new Error(attachmentType === "image"
+        ? `Part 이미지 파일 형식을 확인해주세요.\n${fileDebugInfo(file)}\n업로드 가능한 이미지 형식: ${SUPPORTED_IMAGE_EXTENSIONS}`
+        : `Part 오디오 파일 형식을 확인해주세요.\n${fileDebugInfo(file)}\n업로드 가능한 오디오 형식: ${SUPPORTED_AUDIO_EXTENSIONS}`);
     }
     if (file.size > maxFileSize) {
-      throw new Error(attachmentType === "image" ? "Part 이미지 파일은 1개당 최대 50MB까지 업로드할 수 있습니다." : "Part 오디오 파일은 1개당 최대 50MB까지 업로드할 수 있습니다.");
+      throw new Error(attachmentType === "image"
+        ? `Part 이미지 파일 용량이 너무 큽니다.\n${fileDebugInfo(file)}\n이미지는 1개당 최대 50MB까지 업로드할 수 있습니다.`
+        : `Part 오디오 파일 용량이 너무 큽니다.\n${fileDebugInfo(file)}\n오디오는 1개당 최대 50MB까지 업로드할 수 있습니다.`);
     }
   }
 
@@ -1329,7 +1371,7 @@ async function replacePartAttachments(
     const upload = await supabase.storage.from(bucket).upload(
       storagePath,
       Buffer.from(await file.arrayBuffer()),
-      { contentType: file.type || (attachmentType === "image" ? "image/png" : "audio/mpeg"), upsert: true },
+      { contentType: attachmentType === "image" ? imageContentType(file) : audioContentType(file), upsert: true },
     );
 
     if (upload.error) {

@@ -81,6 +81,8 @@ const assignmentPartTypes: AssignmentPartType[] = ["recording", "listening", "wr
 const MAX_IMAGE_FILE_BYTES = 50 * 1024 * 1024;
 const MAX_AUDIO_FILE_BYTES = 50 * 1024 * 1024;
 const MAX_ASSIGNMENT_UPLOAD_BYTES = 50 * 1024 * 1024;
+const SUPPORTED_IMAGE_EXTENSIONS = "png, jpg, jpeg, gif, webp, heic, heif, bmp, tif, tiff, svg";
+const SUPPORTED_AUDIO_EXTENSIONS = "mp3, m4a, wav, webm, ogg, oga, aac, aif, aiff, caf, flac, amr";
 
 function partTypeLabel(type: AssignmentPartType) {
   if (type === "instruction") return "설명";
@@ -123,6 +125,19 @@ function formatFileSize(bytes: number) {
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
   if (bytes >= 1024) return `${Math.ceil(bytes / 1024)}KB`;
   return `${bytes}B`;
+}
+
+function fileExtension(fileName: string) {
+  const match = fileName.toLowerCase().match(/\.([a-z0-9]+)$/);
+  return match?.[1] ?? "";
+}
+
+function isSupportedImageFile(file: File) {
+  return file.type.startsWith("image/") || /^(png|jpe?g|gif|webp|heic|heif|bmp|tiff?|svg)$/.test(fileExtension(file.name));
+}
+
+function isSupportedAudioFile(file: File) {
+  return file.type.startsWith("audio/") || /^(mp3|m4a|wav|webm|ogg|oga|aac|aiff?|caf|flac|amr)$/.test(fileExtension(file.name));
 }
 
 function partFieldCopy(type: AssignmentPartType) {
@@ -404,14 +419,23 @@ function SaveAlertModal({
   );
 }
 
-function responseErrorMessage(data: unknown) {
+function responseErrorMessage(data: unknown, response?: Response, responseText = "") {
   const fallback = "입력한 내용을 확인한 뒤 다시 시도해주세요.";
-  if (!data || typeof data !== "object") return fallback;
-  const error = (data as { error?: unknown }).error;
-  if (typeof error === "string") return error.trim() || fallback;
-  if (Array.isArray(error)) {
-    const messages = error.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
-    return messages.length > 0 ? messages.join("\n") : fallback;
+  if (data && typeof data === "object") {
+    const error = (data as { error?: unknown }).error;
+    if (typeof error === "string") return error.trim() || fallback;
+    if (Array.isArray(error)) {
+      const messages = error.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+      return messages.length > 0 ? messages.join("\n") : fallback;
+    }
+  }
+  if (response?.status === 413) {
+    return "첨부 파일 용량이 서버에서 허용하는 크기를 초과했습니다. 파일을 압축하거나 개수를 줄여주세요.";
+  }
+  if (response && response.status >= 400) {
+    const plainText = responseText.trim();
+    if (plainText && plainText.length < 300 && !plainText.startsWith("<")) return plainText;
+    return `${fallback}\n상태 코드: ${response.status}`;
   }
   return fallback;
 }
@@ -469,6 +493,9 @@ function validateUploadSize(template: TemplateState) {
 
     for (const file of part.imageFiles) {
       totalBytes += file.size;
+      if (!isSupportedImageFile(file)) {
+        return `${partName}: 이미지 파일 "${file.name}"의 형식을 확인해주세요.\n현재 확장자: ${fileExtension(file.name) || "없음"}\n브라우저 파일 타입: ${file.type || "없음"}\n업로드 가능한 이미지 형식: ${SUPPORTED_IMAGE_EXTENSIONS}`;
+      }
       if (file.size > MAX_IMAGE_FILE_BYTES) {
         return `${partName}: 이미지 파일 "${file.name}"의 용량이 ${formatFileSize(file.size)}입니다.\n이미지는 1개당 최대 ${formatFileSize(MAX_IMAGE_FILE_BYTES)}까지 업로드할 수 있습니다.`;
       }
@@ -476,6 +503,9 @@ function validateUploadSize(template: TemplateState) {
 
     for (const file of part.audioFiles) {
       totalBytes += file.size;
+      if (!isSupportedAudioFile(file)) {
+        return `${partName}: 오디오 파일 "${file.name}"의 형식을 확인해주세요.\n현재 확장자: ${fileExtension(file.name) || "없음"}\n브라우저 파일 타입: ${file.type || "없음"}\n업로드 가능한 오디오 형식: ${SUPPORTED_AUDIO_EXTENSIONS}`;
+      }
       if (file.size > MAX_AUDIO_FILE_BYTES) {
         return `${partName}: 오디오 파일 "${file.name}"의 용량이 ${formatFileSize(file.size)}입니다.\n오디오는 1개당 최대 ${formatFileSize(MAX_AUDIO_FILE_BYTES)}까지 업로드할 수 있습니다.`;
       }
@@ -724,20 +754,27 @@ function NewAssignmentForm() {
         part.audioFiles.forEach((file) => formData.append(`partAudioFiles[${index}]`, file, file.name));
       });
       const response = await fetch("/api/teacher/assignments", { method: "POST", body: formData });
-      const data = await response.json().catch(() => ({}));
-      if (data.assignment) {
+      const responseText = await response.text();
+      let data: { assignment?: { item?: { audioFileName?: string; audioUrl?: string }; imageUrl?: string; imageFileName?: string } } = {};
+      try {
+        data = responseText ? JSON.parse(responseText) : {};
+      } catch {
+        data = {};
+      }
+      const savedAssignment = data.assignment;
+      if (savedAssignment) {
         setTemplate((current) => ({
           ...current,
-          audioFileName: data.assignment.item?.audioFileName ?? current.audioFileName,
-          audioUrl: data.assignment.item?.audioUrl ?? current.audioUrl,
-          imageUrl: data.assignment.imageUrl || current.imageUrl,
-          imageFileName: data.assignment.imageFileName ?? current.imageFileName,
+          audioFileName: savedAssignment.item?.audioFileName ?? current.audioFileName,
+          audioUrl: savedAssignment.item?.audioUrl ?? current.audioUrl,
+          imageUrl: savedAssignment.imageUrl || current.imageUrl,
+          imageFileName: savedAssignment.imageFileName ?? current.imageFileName,
         }));
       }
       if (!response.ok) {
         setAlert({
           title: "숙제를 저장하지 못했습니다",
-          message: responseErrorMessage(data),
+          message: responseErrorMessage(data, response, responseText),
         });
         return;
       }
@@ -867,7 +904,10 @@ function NewAssignmentForm() {
                     <div className="grid gap-4 md:grid-cols-2">
                       <label className="grid gap-2 text-sm font-semibold">
                         {copy.imageLabel}
-                        <Input type="file" accept="image/*" multiple onChange={(event) => updatePartFiles(index, "imageFiles", event.target.files)} />
+                        <Input type="file" accept="image/*,.heic,.heif,.bmp,.tif,.tiff,.svg" multiple onChange={(event) => updatePartFiles(index, "imageFiles", event.target.files)} />
+                        <p className="text-xs font-semibold text-slate-500">
+                          이미지 1개당 최대 {formatFileSize(MAX_IMAGE_FILE_BYTES)}, 첨부 전체 최대 {formatFileSize(MAX_ASSIGNMENT_UPLOAD_BYTES)}
+                        </p>
                         <PartFileSummary
                           kind="image"
                           selectedFiles={part.imageFiles}
@@ -876,7 +916,10 @@ function NewAssignmentForm() {
                       </label>
                       <label className="grid gap-2 text-sm font-semibold">
                         {copy.audioLabel}
-                        <Input type="file" accept="audio/*" multiple onChange={(event) => updatePartFiles(index, "audioFiles", event.target.files)} />
+                        <Input type="file" accept="audio/*,.m4a,.aac,.aif,.aiff,.caf,.flac,.amr,.oga,.ogg,.webm,.wav,.mp3" multiple onChange={(event) => updatePartFiles(index, "audioFiles", event.target.files)} />
+                        <p className="text-xs font-semibold text-slate-500">
+                          오디오 1개당 최대 {formatFileSize(MAX_AUDIO_FILE_BYTES)}, 첨부 전체 최대 {formatFileSize(MAX_ASSIGNMENT_UPLOAD_BYTES)}
+                        </p>
                         <PartFileSummary
                           kind="audio"
                           selectedFiles={part.audioFiles}
