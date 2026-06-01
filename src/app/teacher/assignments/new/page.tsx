@@ -483,6 +483,33 @@ function SaveAlertModal({
   );
 }
 
+function ConfirmModal({
+  title,
+  message,
+  confirmLabel,
+  onCancel,
+  onConfirm,
+}: {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/35 p-4" role="alertdialog" aria-modal="true">
+      <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-soft">
+        <h2 className="text-xl font-extrabold">{title}</h2>
+        <p className="mt-3 whitespace-pre-wrap leading-7 text-slate-600">{message}</p>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onCancel}>취소</Button>
+          <Button type="button" variant="danger" onClick={onConfirm}>{confirmLabel}</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function responseErrorMessage(data: unknown, response?: Response, responseText = "") {
   const fallback = "입력한 내용을 확인한 뒤 다시 시도해주세요.";
   const lines: string[] = [];
@@ -627,6 +654,7 @@ function NewAssignmentForm() {
   const isEditMode = Boolean(routeAssignmentId);
   const [newAssignmentId] = useState(createAssignmentId);
   const [alert, setAlert] = useState<{ title: string; message: string } | null>(null);
+  const [partDeleteIndex, setPartDeleteIndex] = useState<number | null>(null);
   const [isSaving, startSaving] = useTransition();
   const [template, setTemplate] = useState<TemplateState>(emptyTemplate);
 
@@ -789,6 +817,12 @@ function NewAssignmentForm() {
         ? current.parts
         : current.parts.filter((_, partIndex) => partIndex !== index),
     }));
+  }
+
+  function confirmRemovePart() {
+    if (partDeleteIndex === null) return;
+    removePart(partDeleteIndex);
+    setPartDeleteIndex(null);
   }
 
   function addVocabularyRow(partIndex: number) {
@@ -1032,7 +1066,7 @@ function NewAssignmentForm() {
                         <Badge tone="blue">Part {index + 1}</Badge>
                         <Badge tone="green">{partTypeLabel(part.partType)}</Badge>
                       </div>
-                      <Button type="button" variant="danger" onClick={() => removePart(index)} disabled={template.parts.length <= 1}>삭제</Button>
+                      <Button type="button" variant="danger" onClick={() => setPartDeleteIndex(index)} disabled={template.parts.length <= 1}>삭제</Button>
                     </div>
                     <div className="grid gap-4 md:grid-cols-2">
                       <label className="grid gap-2 text-sm font-semibold">
@@ -1236,6 +1270,15 @@ function NewAssignmentForm() {
         </Card>
       </div>
       {alert && <SaveAlertModal title={alert.title} message={alert.message} onClose={() => setAlert(null)} />}
+      {partDeleteIndex !== null && (
+        <ConfirmModal
+          title="Part를 삭제하시겠습니까?"
+          message={`${template.parts[partDeleteIndex]?.title || `Part ${partDeleteIndex + 1}`}를 삭제합니다. 저장 전까지는 화면에서만 삭제된 상태입니다.`}
+          confirmLabel="삭제"
+          onCancel={() => setPartDeleteIndex(null)}
+          onConfirm={confirmRemovePart}
+        />
+      )}
     </TeacherLayout>
   );
 }
