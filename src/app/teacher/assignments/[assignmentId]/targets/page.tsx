@@ -263,7 +263,13 @@ export default function AssignmentTargetsPage() {
         setError(json.error ?? "배정 취소 중 오류가 발생했습니다.");
         return;
       }
-      setMessage(`배정 ${json.cancelledCount ?? 0}건을 취소했습니다.`);
+      const deletedSubmissions = Number(json.deletedSubmissionCount ?? 0);
+      const deletedFiles = Number(json.deletedStorageObjectCount ?? 0);
+      setMessage(
+        `배정 ${json.deletedTargetCount ?? json.cancelledCount ?? 0}건을 취소했습니다.` +
+        (deletedSubmissions > 0 ? ` 제출 이력 ${deletedSubmissions}건도 삭제했습니다.` : "") +
+        (deletedFiles > 0 ? ` 첨부 파일 ${deletedFiles}개도 삭제했습니다.` : ""),
+      );
       setIsCancelModalOpen(false);
       await loadTargets();
     });
@@ -397,7 +403,9 @@ export default function AssignmentTargetsPage() {
 
       {isCancelModalOpen && (
         <ConfirmBox title="선택한 학생의 숙제 배정을 취소하시겠습니까?" onClose={() => setIsCancelModalOpen(false)}>
-          <p className="leading-7 text-slate-600">선택한 학생의 배정을 취소합니다. 제출 기록이 있는 경우에도 제출 이력은 보존되고 배정만 취소됩니다.</p>
+          <p className="leading-7 text-slate-600">
+            선택한 학생의 배정을 취소합니다. 제출 기록이 있으면 제출 이력과 제출 첨부 파일도 함께 삭제됩니다.
+          </p>
           <div className="mt-5 grid gap-2 sm:grid-cols-2"><Button type="button" variant="secondary" onClick={() => setIsCancelModalOpen(false)}>닫기</Button><Button type="button" variant="danger" onClick={cancelTargets} disabled={isPending}>{isPending ? "취소 중..." : "배정 취소"}</Button></div>
         </ConfirmBox>
       )}
