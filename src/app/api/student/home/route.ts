@@ -6,6 +6,30 @@ import { getStudentSession } from "@/server/auth/studentSession";
 
 export const runtime = "nodejs";
 
+function todayDate() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const year = parts.find((part) => part.type === "year")?.value ?? "2026";
+  const month = parts.find((part) => part.type === "month")?.value ?? "06";
+  const day = parts.find((part) => part.type === "day")?.value ?? "01";
+  return `${year}-${month}-${day}`;
+}
+
+function toDateString(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function calendarRangeAroundToday() {
+  const today = new Date(`${todayDate()}T00:00:00`);
+  const start = new Date(today.getFullYear(), today.getMonth() - 12, 1);
+  const end = new Date(today.getFullYear(), today.getMonth() + 13, 0);
+  return { start: toDateString(start), end: toDateString(end) };
+}
+
 export async function GET() {
   const session = await getStudentSession();
   if (!session) return NextResponse.json({ error: "학생 로그인이 필요합니다." }, { status: 401 });
@@ -21,8 +45,7 @@ export async function GET() {
     `,
     [session.studentId, session.teacherId],
   );
-  const start = "2026-05-01";
-  const end = "2026-06-07";
+  const { start, end } = calendarRangeAroundToday();
   const [notices, weeklyHomework, calendarEvents, upcomingTests, testResults] = await Promise.all([
     getStudentVisibleNotices(session.studentId, session.teacherId),
     studentAssignmentRepository.getAssignmentsForStudent(session.studentId, session.teacherId),

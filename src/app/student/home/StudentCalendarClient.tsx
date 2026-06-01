@@ -16,6 +16,7 @@ export type StudentCalendarEvent = {
   subject?: string;
   status?: string;
   className?: string;
+  description?: string | null;
   startTime?: string | null;
   endTime?: string | null;
 };
@@ -34,6 +35,54 @@ function buildMonthDays(anchor = "2026-05-01") {
       return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     }),
   ];
+}
+
+function toDateString(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function todayDate() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const year = parts.find((part) => part.type === "year")?.value ?? "2026";
+  const month = parts.find((part) => part.type === "month")?.value ?? "06";
+  const day = parts.find((part) => part.type === "day")?.value ?? "01";
+  return `${year}-${month}-${day}`;
+}
+
+function dateOnly(value?: string | null) {
+  return value ? value.slice(0, 10) : "";
+}
+
+function monthStart(value: string) {
+  const date = new Date(`${dateOnly(value)}T00:00:00`);
+  return toDateString(new Date(date.getFullYear(), date.getMonth(), 1));
+}
+
+function addMonths(value: string, amount: number) {
+  const date = new Date(`${dateOnly(value)}T00:00:00`);
+  return toDateString(new Date(date.getFullYear(), date.getMonth() + amount, 1));
+}
+
+function isSameMonth(left: string, right: string) {
+  return dateOnly(left).slice(0, 7) === dateOnly(right).slice(0, 7);
+}
+
+function selectedDateForMonth(targetMonth: string, currentSelectedDate: string) {
+  const target = new Date(`${dateOnly(targetMonth)}T00:00:00`);
+  const today = todayDate();
+  if (isSameMonth(today, targetMonth)) return today;
+
+  const current = new Date(`${dateOnly(currentSelectedDate)}T00:00:00`);
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  if (current.getDate() <= lastDay) {
+    return toDateString(new Date(target.getFullYear(), target.getMonth(), current.getDate()));
+  }
+  return toDateString(new Date(target.getFullYear(), target.getMonth(), 1));
 }
 
 function formatDate(value: string) {
@@ -78,9 +127,10 @@ function assignmentStatusTone(status?: string): "green" | "yellow" | "red" | "gr
 }
 
 export function StudentCalendarClient({ events }: { events: StudentCalendarEvent[] }) {
-  const firstDate = events[0]?.date ?? "2026-05-25";
-  const [selectedDate, setSelectedDate] = useState(firstDate);
-  const days = buildMonthDays(firstDate);
+  const today = todayDate();
+  const [selectedDate, setSelectedDate] = useState(today);
+  const [displayMonth, setDisplayMonth] = useState(monthStart(today));
+  const days = buildMonthDays(displayMonth);
   const eventsByDate = useMemo(() => {
     const grouped = new Map<string, StudentCalendarEvent[]>();
     for (const event of events) {
@@ -91,6 +141,20 @@ export function StudentCalendarClient({ events }: { events: StudentCalendarEvent
   }, [events]);
   const selectedEvents = eventsByDate.get(selectedDate) ?? [];
 
+  function moveMonth(amount: number) {
+    setDisplayMonth((current) => {
+      const nextMonth = addMonths(current, amount);
+      setSelectedDate((currentSelectedDate) => selectedDateForMonth(nextMonth, currentSelectedDate));
+      return nextMonth;
+    });
+  }
+
+  function goToday() {
+    const todayValue = todayDate();
+    setDisplayMonth(monthStart(todayValue));
+    setSelectedDate(todayValue);
+  }
+
   return (
     <section id="student-calendar" className="student-section">
       <Badge tone="green">Calendar</Badge>
@@ -98,10 +162,37 @@ export function StudentCalendarClient({ events }: { events: StudentCalendarEvent
       <Card>
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="text-lg font-bold">{monthTitle(firstDate)}</h3>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => moveMonth(-1)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-line bg-white text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+                aria-label="이전달"
+              >
+                &lt;
+              </button>
+              <h3 className="min-w-28 text-center text-lg font-bold">{monthTitle(displayMonth)}</h3>
+              <button
+                type="button"
+                onClick={() => moveMonth(1)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-line bg-white text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+                aria-label="다음달"
+              >
+                &gt;
+              </button>
+            </div>
             <p className="mt-1 text-sm leading-6 text-[#5b655d]">날짜를 누르면 숙제, 시험, 휴강, 보강 일정을 확인할 수 있어요.</p>
           </div>
-          <Badge tone="blue">반 공유 캘린더</Badge>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={goToday}
+              className="inline-flex min-h-8 items-center justify-center rounded-md border border-line bg-white px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
+            >
+              오늘
+            </button>
+            <Badge tone="blue">반 공유 캘린더</Badge>
+          </div>
         </div>
 
         <div className="grid grid-cols-7 gap-1 text-center text-xs font-bold text-[#5b655d]">
@@ -168,6 +259,11 @@ export function StudentCalendarClient({ events }: { events: StudentCalendarEvent
                     </div>
                     <p className="mt-2 text-sm font-bold text-ink">{event.title}</p>
                     {event.type === "test" && <p className="mt-1 text-xs font-semibold text-slate-500">{timeRange || "시간 미정"}</p>}
+                    {event.description && (
+                      <p className="mt-2 rounded-[12px] bg-white px-3 py-2 text-xs font-semibold leading-5 text-[#5b655d]">
+                        {event.description}
+                      </p>
+                    )}
                     {(event.type === "assignment" || event.type === "assignment_due") && (
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         {event.subject && <Badge tone="blue">{event.subject}</Badge>}

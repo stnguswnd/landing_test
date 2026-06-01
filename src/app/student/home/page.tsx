@@ -105,6 +105,30 @@ function formatDateTime(value?: string | null) {
   return new Intl.DateTimeFormat("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Seoul" }).format(new Date(value));
 }
 
+function todayDate() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const year = parts.find((part) => part.type === "year")?.value ?? "2026";
+  const month = parts.find((part) => part.type === "month")?.value ?? "06";
+  const day = parts.find((part) => part.type === "day")?.value ?? "01";
+  return `${year}-${month}-${day}`;
+}
+
+function toDateString(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function calendarRangeAroundToday() {
+  const today = new Date(`${todayDate()}T00:00:00`);
+  const start = new Date(today.getFullYear(), today.getMonth() - 12, 1);
+  const end = new Date(today.getFullYear(), today.getMonth() + 13, 0);
+  return { start: toDateString(start), end: toDateString(end) };
+}
+
 async function signedLogoUrl(path: string | null) {
   if (!path) return "";
   const supabase = createSupabaseAdminClient();
@@ -140,11 +164,12 @@ export default async function StudentHomePage() {
     redirect("/login");
   }
 
+  const calendarRange = calendarRangeAroundToday();
   const [assignments, profile, notices, calendarEvents, upcomingTests, testResults] = await Promise.all([
     studentAssignmentRepository.getAssignmentsForStudent(session.studentId, session.teacherId) as Promise<AssignmentWithTarget[]>,
     getStudentProfile(session.studentId, session.teacherId),
     getStudentVisibleNotices(session.studentId, session.teacherId) as Promise<Notice[]>,
-    getStudentCalendarEvents(session.studentId, session.teacherId, "2026-05-01", "2026-06-07") as Promise<StudentCalendarEvent[]>,
+    getStudentCalendarEvents(session.studentId, session.teacherId, calendarRange.start, calendarRange.end) as Promise<StudentCalendarEvent[]>,
     getStudentUpcomingTests(session.studentId, session.teacherId) as Promise<UpcomingTest[]>,
     getStudentTestResults(session.studentId, session.teacherId) as Promise<TestResult[]>,
   ]);
