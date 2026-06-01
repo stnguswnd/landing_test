@@ -107,9 +107,9 @@ type TemplateState = {
 };
 
 const assignmentPartTypes: AssignmentPartType[] = ["recording", "listening", "writing", "vocabulary_example", "vocabulary_recording", "photo_submission", "quiz"];
-const MAX_IMAGE_FILE_BYTES = 50 * 1024 * 1024;
-const MAX_AUDIO_FILE_BYTES = 50 * 1024 * 1024;
-const MAX_ASSIGNMENT_UPLOAD_BYTES = 50 * 1024 * 1024;
+const MAX_IMAGE_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_AUDIO_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_ASSIGNMENT_UPLOAD_BYTES = 100 * 1024 * 1024;
 const SUPPORTED_IMAGE_EXTENSIONS = "png, jpg, jpeg, gif, webp, heic, heif, bmp, tif, tiff, svg";
 const SUPPORTED_AUDIO_EXTENSIONS = "mp3, m4a, wav, webm, ogg, oga, aac, aif, aiff, caf, flac, amr";
 
@@ -512,6 +512,14 @@ function ConfirmModal({
 
 function responseErrorMessage(data: unknown, response?: Response, responseText = "") {
   const fallback = "입력한 내용을 확인한 뒤 다시 시도해주세요.";
+  if (response?.status === 413) {
+    return [
+      "첨부 파일 용량이 서버에서 허용하는 요청 크기를 초과했습니다.",
+      `한 번에 저장 가능한 첨부 파일 합계는 약 ${formatFileSize(MAX_ASSIGNMENT_UPLOAD_BYTES)} 이하로 맞춰주세요.`,
+      "이미지나 오디오를 압축하거나 파일 개수를 줄인 뒤 다시 저장해주세요.",
+      "HTTP 413",
+    ].join("\n");
+  }
   const lines: string[] = [];
   if (response) lines.push(`HTTP ${response.status}`);
   if (data && typeof data === "object") {
@@ -526,9 +534,6 @@ function responseErrorMessage(data: unknown, response?: Response, responseText =
       if (typeof value === "string" && value.trim()) lines.push(`${key}: ${value.trim()}`);
     }
     if (lines.length > 0) return lines.join("\n");
-  }
-  if (response?.status === 413) {
-    return "첨부 파일 용량이 서버에서 허용하는 크기를 초과했습니다. 파일을 압축하거나 개수를 줄여주세요.";
   }
   if (response && response.status >= 400) {
     const plainText = responseText.trim();
@@ -634,7 +639,7 @@ function validateUploadSize(template: TemplateState) {
   }
 
   if (totalBytes > MAX_ASSIGNMENT_UPLOAD_BYTES) {
-    return `첨부 파일 총 용량이 너무 큽니다.\n현재 선택한 파일 합계: ${formatFileSize(totalBytes)}\n한 번에 저장 가능한 권장 용량: ${formatFileSize(MAX_ASSIGNMENT_UPLOAD_BYTES)} 이하\n\n이미지나 오디오를 압축하거나, 파일 개수를 줄인 뒤 다시 저장해주세요.`;
+    return `첨부 파일 총 용량이 너무 큽니다.\n현재 선택한 파일 합계: ${formatFileSize(totalBytes)}\n한 번에 저장 가능한 첨부 파일 합계: ${formatFileSize(MAX_ASSIGNMENT_UPLOAD_BYTES)} 이하\n\n이미지나 오디오를 압축하거나, 파일 개수를 줄인 뒤 다시 저장해주세요.`;
   }
 
   return null;

@@ -32,20 +32,8 @@ const SUPPORTED_ASSIGNMENT_TYPES = [
   "quiz",
 ] as const;
 
-const LEGACY_ASSIGNMENT_TYPES = [
-  "image_speaking",
-  "sentence_shadowing",
-  "free_speaking",
-  "vocabulary",
-  "general",
-] as const;
-
 export function isSupportedAssignmentType(value: string | null | undefined): value is AssignmentType {
   return SUPPORTED_ASSIGNMENT_TYPES.includes(value as AssignmentType);
-}
-
-export function isLegacyAssignmentType(value: string | null | undefined) {
-  return LEGACY_ASSIGNMENT_TYPES.includes(value as (typeof LEGACY_ASSIGNMENT_TYPES)[number]);
 }
 
 export function normalizeAssignmentType(value: string | null | undefined): AssignmentType {

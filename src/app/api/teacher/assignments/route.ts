@@ -10,8 +10,8 @@ import { isSupportedAssignmentType, itemTypeForAssignmentType, normalizeAssignme
 
 export const runtime = "nodejs";
 
-const MAX_IMAGE_FILE_SIZE = 50 * 1024 * 1024;
-const MAX_AUDIO_FILE_SIZE = 50 * 1024 * 1024;
+const MAX_IMAGE_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_AUDIO_FILE_SIZE = 10 * 1024 * 1024;
 const SUPPORTED_IMAGE_EXTENSIONS = "png, jpg, jpeg, gif, webp, heic, heif, bmp, tif, tiff, svg";
 const SUPPORTED_AUDIO_EXTENSIONS = "mp3, m4a, wav, webm, ogg, oga, aac, aif, aiff, caf, flac, amr";
 
@@ -878,7 +878,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `이미지 파일 형식을 확인해주세요.\n${fileDebugInfo(imageFile)}\n업로드 가능한 이미지 형식: ${SUPPORTED_IMAGE_EXTENSIONS}` }, { status: 400 });
     }
     if (imageFile.size > MAX_IMAGE_FILE_SIZE) {
-      return NextResponse.json({ error: `이미지 파일 용량이 너무 큽니다.\n${fileDebugInfo(imageFile)}\n이미지는 1개당 최대 50MB까지 업로드할 수 있습니다.` }, { status: 400 });
+      return NextResponse.json({ error: `이미지 파일 용량이 너무 큽니다.\n${fileDebugInfo(imageFile)}\n이미지는 1개당 최대 10MB까지 업로드할 수 있습니다.` }, { status: 400 });
     }
     imageFileName = safeFileName(imageFile.name);
     imageStoragePath = `assignments/${id}/images/${imageFileName}`;
@@ -910,7 +910,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `오디오 파일 형식을 확인해주세요.\n${fileDebugInfo(audioFile)}\n업로드 가능한 오디오 형식: ${SUPPORTED_AUDIO_EXTENSIONS}` }, { status: 400 });
     }
     if (audioFile.size > MAX_AUDIO_FILE_SIZE) {
-      return NextResponse.json({ error: `오디오 파일 용량이 너무 큽니다.\n${fileDebugInfo(audioFile)}\n오디오는 1개당 최대 50MB까지 업로드할 수 있습니다.` }, { status: 400 });
+      return NextResponse.json({ error: `오디오 파일 용량이 너무 큽니다.\n${fileDebugInfo(audioFile)}\n오디오는 1개당 최대 10MB까지 업로드할 수 있습니다.` }, { status: 400 });
     }
     audioFileName = safeFileName(audioFile.name);
     audioStoragePath = `assignments/${id}/audio/${audioFileName}`;
@@ -1664,8 +1664,8 @@ async function replaceQuizQuestionAttachments(
     }
     if (file.size > maxFileSize) {
       throw new Error(attachmentType === "image"
-        ? `퀴즈 문제 이미지 파일 용량이 너무 큽니다.\n${fileDebugInfo(file)}\n이미지는 1개당 최대 50MB까지 업로드할 수 있습니다.`
-        : `퀴즈 문제 오디오 파일 용량이 너무 큽니다.\n${fileDebugInfo(file)}\n오디오는 1개당 최대 50MB까지 업로드할 수 있습니다.`);
+        ? `퀴즈 문제 이미지 파일 용량이 너무 큽니다.\n${fileDebugInfo(file)}\n이미지는 1개당 최대 10MB까지 업로드할 수 있습니다.`
+        : `퀴즈 문제 오디오 파일 용량이 너무 큽니다.\n${fileDebugInfo(file)}\n오디오는 1개당 최대 10MB까지 업로드할 수 있습니다.`);
     }
   }
 
@@ -1782,8 +1782,8 @@ async function replacePartAttachments(
     }
     if (file.size > maxFileSize) {
       throw new Error(attachmentType === "image"
-        ? `Part 이미지 파일 용량이 너무 큽니다.\n${fileDebugInfo(file)}\n이미지는 1개당 최대 50MB까지 업로드할 수 있습니다.`
-        : `Part 오디오 파일 용량이 너무 큽니다.\n${fileDebugInfo(file)}\n오디오는 1개당 최대 50MB까지 업로드할 수 있습니다.`);
+        ? `Part 이미지 파일 용량이 너무 큽니다.\n${fileDebugInfo(file)}\n이미지는 1개당 최대 10MB까지 업로드할 수 있습니다.`
+        : `Part 오디오 파일 용량이 너무 큽니다.\n${fileDebugInfo(file)}\n오디오는 1개당 최대 10MB까지 업로드할 수 있습니다.`);
     }
   }
 
