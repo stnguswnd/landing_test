@@ -213,7 +213,6 @@ function HeroMetric({ label, value }: { label: string; value: string }) {
 }
 
 function WeeklyHomeworkSection({ assignments }: { assignments: AssignmentWithTarget[] }) {
-  const weeklyAssignments = assignments.slice(0, 3);
   return (
     <section id="weekly-homework" className="student-section">
       <div className="mb-5 flex items-end justify-between gap-3">
@@ -223,13 +222,13 @@ function WeeklyHomeworkSection({ assignments }: { assignments: AssignmentWithTar
           <p className="mt-2 text-base leading-7 text-[#5b655d]">이번 주에 해야 할 숙제를 확인하고 제출해 주세요.</p>
         </div>
       </div>
-      {weeklyAssignments.length === 0 ? (
+      {assignments.length === 0 ? (
         <Card>
           <p className="text-sm text-slate-500">이번주 숙제가 없습니다.</p>
         </Card>
       ) : (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 lg:gap-4">
-          {weeklyAssignments.map((assignment) => (
+          {assignments.map((assignment) => (
             <HomeworkSubjectCard key={assignment.id} assignment={assignment} />
           ))}
         </div>

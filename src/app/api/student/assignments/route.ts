@@ -81,6 +81,11 @@ type AssignmentRow = {
   }> | null;
 };
 
+const assignmentTitleCollator = new Intl.Collator("ko-KR", {
+  numeric: true,
+  sensitivity: "base",
+});
+
 async function signedUrl(bucket: string, path: string | null) {
   if (!path) return "";
   const supabase = createSupabaseAdminClient();
@@ -295,6 +300,12 @@ export async function GET() {
       }))),
     })),
   );
+
+  assignments.sort((a, b) => {
+    const titleCompare = assignmentTitleCollator.compare(a.title, b.title);
+    if (titleCompare !== 0) return titleCompare;
+    return a.createdAt.localeCompare(b.createdAt);
+  });
 
   return NextResponse.json(assignments);
 }

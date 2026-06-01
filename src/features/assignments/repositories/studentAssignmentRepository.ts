@@ -233,6 +233,17 @@ type AssignmentRow = {
   draft: AssignmentDraftRow | null;
 };
 
+const assignmentTitleCollator = new Intl.Collator("ko-KR", {
+  numeric: true,
+  sensitivity: "base",
+});
+
+function compareAssignmentsByTitle(a: Assignment, b: Assignment) {
+  const titleCompare = assignmentTitleCollator.compare(a.title, b.title);
+  if (titleCompare !== 0) return titleCompare;
+  return a.createdAt.localeCompare(b.createdAt);
+}
+
 async function signedUrl(bucket: string, path: string | null) {
   if (!path) return "";
   const supabase = createSupabaseAdminClient();
@@ -871,7 +882,8 @@ export const studentAssignmentRepository = {
       [studentId, teacherId],
     );
 
-    return Promise.all(result.rows.map(mapAssignmentWithSignedUrls));
+    const assignments = await Promise.all(result.rows.map(mapAssignmentWithSignedUrls));
+    return assignments.sort(compareAssignmentsByTitle);
   },
 
   async getAssignmentForStudent(studentId: string, teacherId: string, assignmentId: string) {
