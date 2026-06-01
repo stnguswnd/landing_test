@@ -8,6 +8,7 @@ import type { Assignment } from "@/types/assignment";
 import { ListeningHomework } from "./ListeningHomework";
 import { MultiPartHomework } from "./MultiPartHomework";
 import { PhotoSubmissionHomework } from "./PhotoSubmissionHomework";
+import { QuizHomework } from "./QuizHomework";
 import { RlRecordingHomework } from "./RlRecordingHomework";
 import { VocabularyExampleHomework } from "./VocabularyExampleHomework";
 import { VocabularyRecordingHomework } from "./VocabularyRecordingHomework";
@@ -32,6 +33,7 @@ function layoutTitle(assignment: Assignment) {
   if (assignmentType === "writing") return "라이팅 숙제";
   if (assignmentType === "vocabulary_example") return "단어장 예문 숙제";
   if (assignmentType === "vocabulary_recording") return "단어장 녹음 숙제";
+  if (assignmentType === "quiz") return "퀴즈 숙제";
   return "듣고녹음하기 숙제";
 }
 
@@ -51,7 +53,11 @@ export default async function StudentAssignmentPage({
 
   return (
     <StudentLayout title={layoutTitle(assignment)}>
-      {activeParts.length > 1 ? <MultiPartHomework assignment={assignment} /> : <HomeworkByType assignment={assignment} />}
+      {activeParts.length > 1
+        ? <MultiPartHomework assignment={assignment} />
+        : activeParts[0]?.partType === "quiz"
+          ? <QuizHomework assignment={assignment} part={activeParts[0]} />
+          : <HomeworkByType assignment={assignment} />}
     </StudentLayout>
   );
 }

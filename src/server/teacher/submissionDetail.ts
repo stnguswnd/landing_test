@@ -45,6 +45,20 @@ type SubmissionRow = {
   ai_grammar_notes: string | null;
   ai_expression_notes: string | null;
   attachments: AttachmentRow[] | null;
+  quiz_answers: QuizAnswerRow[] | null;
+};
+
+type QuizAnswerRow = {
+  id: string;
+  question_id: string;
+  question_text: string;
+  selected_choice_id: string | null;
+  selected_choice_label: string | null;
+  selected_choice_text: string | null;
+  correct_choice_label: string | null;
+  correct_choice_text: string | null;
+  incorrect_reason: string | null;
+  is_correct: boolean | null;
 };
 
 type AttachmentRow = {
@@ -130,6 +144,7 @@ export type TeacherSubmissionDetail = {
       heightPx?: number;
       orderIndex: number;
     }>;
+    quizAnswers?: QuizAnswerRow[];
   }>;
   vocabularyItems: Array<{
     id: string;
@@ -250,7 +265,32 @@ export async function getTeacherSubmissionDetail(
             where sia.submission_item_id = si.id
           ),
           '[]'::json
-        ) as attachments
+        ) as attachments,
+        coalesce(
+          (
+            select json_agg(
+              json_build_object(
+                'id', sqa.id,
+                'question_id', aqq.id,
+                'question_text', aqq.question_text,
+                'selected_choice_id', sqa.selected_choice_id,
+                'selected_choice_label', selected.choice_label,
+                'selected_choice_text', selected.choice_text,
+                'correct_choice_label', correct.choice_label,
+                'correct_choice_text', correct.choice_text,
+                'incorrect_reason', selected.incorrect_reason,
+                'is_correct', sqa.is_correct
+              )
+              order by aqq.order_index
+            )
+            from submission_quiz_answers sqa
+            join assignment_quiz_questions aqq on aqq.id = sqa.question_id
+            left join assignment_quiz_choices selected on selected.id = sqa.selected_choice_id
+            left join assignment_quiz_choices correct on correct.question_id = aqq.id and correct.is_correct = true
+            where sqa.submission_item_id = si.id
+          ),
+          '[]'::json
+        ) as quiz_answers
       from submissions sub
       join students s on s.id = sub.student_id
       join assignments a on a.id = sub.assignment_id and a.teacher_id = $2
@@ -334,6 +374,7 @@ export async function getTeacherSubmissionDetail(
       aiGrammarNotes: row.ai_grammar_notes ?? undefined,
       aiExpressionNotes: row.ai_expression_notes ?? undefined,
       attachments: await Promise.all((row.attachments ?? []).map(mapAttachment)),
+      quizAnswers: row.quiz_answers ?? [],
     }))),
     vocabularyItems: vocabularyResult.rows.map((row) => ({
       id: row.id,

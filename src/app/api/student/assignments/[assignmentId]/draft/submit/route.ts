@@ -64,6 +64,15 @@ function stringArray(value: unknown) {
   return Array.isArray(value) ? value.map((item) => String(item ?? "").trim()).filter(Boolean) : [];
 }
 
+function quizAnswers(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .map(([questionId, choiceId]) => [questionId.trim(), String(choiceId ?? "").trim()])
+      .filter(([questionId, choiceId]) => questionId && choiceId),
+  );
+}
+
 export async function POST(
   _request: Request,
   context: { params: Promise<{ assignmentId: string }> },
@@ -167,6 +176,7 @@ export async function POST(
     );
 
     await client.query("delete from submission_item_attachments where submission_id = $1", [submissionId]);
+    await client.query("delete from submission_quiz_answers where submission_id = $1", [submissionId]);
     await client.query("delete from submission_items where submission_id = $1", [submissionId]);
     await client.query("delete from submission_vocabulary_items where submission_id = $1", [submissionId]);
 
@@ -269,6 +279,54 @@ export async function POST(
               text(answer.aiGrammarNotes),
               answer.aiFeedbackRaw ? JSON.stringify(answer.aiFeedbackRaw) : null,
               text(answer.revisedAnswerText),
+            ],
+          );
+        }
+      }
+
+      if (part.part_type === "quiz") {
+        const answers = quizAnswers(data.quizAnswers);
+        for (const [questionId, selectedChoiceId] of Object.entries(answers)) {
+          const choiceResult = await client.query<{ choice_text: string; is_correct: boolean }>(
+            `
+              select aqc.choice_text, aqc.is_correct
+              from assignment_quiz_choices aqc
+              join assignment_quiz_questions aqq on aqq.id = aqc.question_id
+              where aqc.id = $1
+                and aqc.question_id = $2
+                and aqq.assignment_part_id = $3
+              limit 1
+            `,
+            [selectedChoiceId, questionId, part.id],
+          );
+          const selectedChoice = choiceResult.rows[0];
+          if (!selectedChoice) continue;
+          await client.query(
+            `
+              insert into submission_quiz_answers (
+                id, submission_id, submission_item_id, assignment_part_id,
+                question_id, selected_choice_id, answer_text, is_correct, answered_at
+              )
+              values ($1, $2, $3, $4, $5, $6, $7, $8, now())
+              on conflict (submission_id, question_id)
+              do update set
+                submission_item_id = excluded.submission_item_id,
+                assignment_part_id = excluded.assignment_part_id,
+                selected_choice_id = excluded.selected_choice_id,
+                answer_text = excluded.answer_text,
+                is_correct = excluded.is_correct,
+                answered_at = now(),
+                updated_at = now()
+            `,
+            [
+              `submission-quiz-answer-${randomUUID()}`,
+              submissionId,
+              submissionItemId,
+              part.id,
+              questionId,
+              selectedChoiceId,
+              selectedChoice.choice_text,
+              selectedChoice.is_correct,
             ],
           );
         }

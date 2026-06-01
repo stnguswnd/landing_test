@@ -154,6 +154,7 @@ function partTypeLabel(type?: string) {
   if (type === "recording") return "녹음 제출";
   if (type === "writing") return "라이팅";
   if (type === "photo_submission") return "사진 제출";
+  if (type === "quiz") return "퀴즈";
   if (type === "vocabulary_example") return "단어 예문";
   if (type === "vocabulary_recording") return "단어 녹음";
   return "Part";
@@ -173,6 +174,7 @@ function MultiPartReview({ items, vocabularyItems }: { items: SubmissionDetail["
               <Badge tone="green">{partTypeLabel(item.partType)}</Badge>
             </div>
             <h3 className="mt-3 text-lg font-bold">{item.title ?? `Part ${index + 1}`}</h3>
+            {item.partType === "quiz" && <QuizAnswersReview answers={item.quizAnswers ?? []} />}
             {item.passageText && <p className="mt-4 whitespace-pre-wrap rounded-md bg-paper p-4 text-lg leading-8">{item.passageText}</p>}
 
             {images.length > 0 && (
@@ -223,6 +225,31 @@ function MultiPartReview({ items, vocabularyItems }: { items: SubmissionDetail["
           </Card>
         );
       })}
+    </div>
+  );
+}
+
+function QuizAnswersReview({ answers }: { answers: NonNullable<SubmissionDetail["items"][number]["quizAnswers"]> }) {
+  const correctCount = answers.filter((answer) => answer.is_correct).length;
+  return (
+    <div className="mt-4 grid gap-3">
+      <div className="rounded-md bg-green-50 p-3 text-sm font-extrabold text-green-700">
+        퀴즈 결과: {correctCount} / {answers.length} 정답
+      </div>
+      {answers.map((answer, index) => (
+        <article key={answer.id} className="rounded-lg border border-line p-4">
+          <div className="flex flex-wrap gap-2">
+            <Badge tone="blue">Q{index + 1}</Badge>
+            <Badge tone={answer.is_correct ? "green" : "yellow"}>{answer.is_correct ? "정답" : "오답"}</Badge>
+          </div>
+          <p className="mt-3 font-bold">{answer.question_text}</p>
+          <div className="mt-3 grid gap-2 text-sm font-semibold text-slate-700">
+            <p>학생 답: {answer.selected_choice_text ? `${answer.selected_choice_label}. ${answer.selected_choice_text}` : "-"}</p>
+            {!answer.is_correct && <p>정답: {answer.correct_choice_text ? `${answer.correct_choice_label}. ${answer.correct_choice_text}` : "-"}</p>}
+            {!answer.is_correct && answer.incorrect_reason && <p className="rounded-md bg-red-50 p-3 text-red-700">이유: {answer.incorrect_reason}</p>}
+          </div>
+        </article>
+      ))}
     </div>
   );
 }

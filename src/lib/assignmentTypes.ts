@@ -4,7 +4,8 @@ export type AssignmentType =
   | "writing"
   | "vocabulary_example"
   | "vocabulary_recording"
-  | "photo_submission";
+  | "photo_submission"
+  | "quiz";
 
 export type AssignmentItemType =
   | "listening_recording"
@@ -12,7 +13,8 @@ export type AssignmentItemType =
   | "writing_prompt"
   | "vocabulary_example"
   | "vocabulary_recording"
-  | "photo_submission";
+  | "photo_submission"
+  | "quiz_prompt";
 
 export type WritingMode = "picture_description" | "topic_diary";
 
@@ -27,13 +29,13 @@ const SUPPORTED_ASSIGNMENT_TYPES = [
   "vocabulary_example",
   "vocabulary_recording",
   "photo_submission",
+  "quiz",
 ] as const;
 
 const LEGACY_ASSIGNMENT_TYPES = [
   "image_speaking",
   "sentence_shadowing",
   "free_speaking",
-  "quiz",
   "vocabulary",
   "general",
 ] as const;
@@ -56,6 +58,7 @@ export function assignmentTypeLabel(value: string | null | undefined) {
   if (type === "vocabulary_example") return "단어장 예문";
   if (type === "vocabulary_recording") return "단어장 녹음";
   if (type === "photo_submission") return "사진 제출";
+  if (type === "quiz") return "퀴즈";
   if (type === "writing") return "라이팅";
   if (type === "listening") return "리스닝";
   return "듣고녹음하기";
@@ -78,6 +81,7 @@ export function itemTypeForAssignmentType(value: string | null | undefined): Ass
   if (type === "vocabulary_example") return "vocabulary_example";
   if (type === "vocabulary_recording") return "vocabulary_recording";
   if (type === "photo_submission") return "photo_submission";
+  if (type === "quiz") return "quiz_prompt";
   if (type === "writing") return "writing_prompt";
   return type;
 }
@@ -92,7 +96,8 @@ export function normalizeAssignmentItemType(
     itemType === "writing_prompt" ||
     itemType === "vocabulary_example" ||
     itemType === "vocabulary_recording" ||
-    itemType === "photo_submission"
+    itemType === "photo_submission" ||
+    itemType === "quiz_prompt"
   ) return itemType;
   return itemTypeForAssignmentType(assignmentType);
 }

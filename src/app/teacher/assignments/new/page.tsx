@@ -24,7 +24,35 @@ type AssignmentPartType =
   | "writing"
   | "photo_submission"
   | "vocabulary_example"
-  | "vocabulary_recording";
+  | "vocabulary_recording"
+  | "quiz";
+
+type QuizChoiceState = {
+  id?: string;
+  choiceLabel: string;
+  choiceText: string;
+  isCorrect: boolean;
+  incorrectReason: string;
+};
+
+type QuizQuestionAttachmentState = {
+  id: string;
+  attachmentType: "image" | "audio" | "video" | "file";
+  fileName?: string;
+  fileUrl?: string;
+  fileSizeBytes?: number;
+  orderIndex: number;
+};
+
+type QuizQuestionState = {
+  id?: string;
+  questionText: string;
+  explanation: string;
+  choices: QuizChoiceState[];
+  imageFiles: File[];
+  audioFiles: File[];
+  attachments: QuizQuestionAttachmentState[];
+};
 
 type AssignmentPartState = {
   id?: string;
@@ -44,6 +72,7 @@ type AssignmentPartState = {
   imageFiles: File[];
   audioFiles: File[];
   attachments: AssignmentPartAttachmentState[];
+  quizQuestions: QuizQuestionState[];
 };
 
 type AssignmentPartAttachmentState = {
@@ -77,7 +106,7 @@ type TemplateState = {
   parts: AssignmentPartState[];
 };
 
-const assignmentPartTypes: AssignmentPartType[] = ["recording", "listening", "writing", "vocabulary_example", "vocabulary_recording", "photo_submission"];
+const assignmentPartTypes: AssignmentPartType[] = ["recording", "listening", "writing", "vocabulary_example", "vocabulary_recording", "photo_submission", "quiz"];
 const MAX_IMAGE_FILE_BYTES = 50 * 1024 * 1024;
 const MAX_AUDIO_FILE_BYTES = 50 * 1024 * 1024;
 const MAX_ASSIGNMENT_UPLOAD_BYTES = 50 * 1024 * 1024;
@@ -90,6 +119,7 @@ function partTypeLabel(type: AssignmentPartType) {
   if (type === "recording") return "듣고녹음하기";
   if (type === "writing") return "라이팅";
   if (type === "photo_submission") return "사진 제출";
+  if (type === "quiz") return "퀴즈";
   if (type === "vocabulary_example") return "단어장 예문";
   return "단어장 녹음";
 }
@@ -98,6 +128,7 @@ function partTypeForAssignmentType(type: AssignmentType | ""): AssignmentPartTyp
   if (type === "listening") return "listening";
   if (type === "writing") return "writing";
   if (type === "photo_submission") return "photo_submission";
+  if (type === "quiz") return "quiz";
   if (type === "vocabulary_example") return "vocabulary_example";
   if (type === "vocabulary_recording") return "vocabulary_recording";
   return "recording";
@@ -105,6 +136,28 @@ function partTypeForAssignmentType(type: AssignmentType | ""): AssignmentPartTyp
 
 function partAllowsSubmission(type: AssignmentPartType) {
   return type !== "instruction" && type !== "listening";
+}
+
+function createQuizChoice(index: number, isCorrect = false): QuizChoiceState {
+  return {
+    id: `quiz-choice-${crypto.randomUUID()}`,
+    choiceLabel: String(index + 1),
+    choiceText: "",
+    isCorrect,
+    incorrectReason: "",
+  };
+}
+
+function createQuizQuestion(index: number): QuizQuestionState {
+  return {
+    id: `quiz-question-${crypto.randomUUID()}`,
+    questionText: "",
+    explanation: "",
+    choices: [createQuizChoice(0, true), createQuizChoice(1), createQuizChoice(2)],
+    imageFiles: [],
+    audioFiles: [],
+    attachments: [],
+  };
 }
 
 function defaultVocabularyRows(): VocabularyRow[] {
@@ -201,6 +254,16 @@ function partFieldCopy(type: AssignmentPartType) {
       submitLabel: "녹음 파일 수",
     };
   }
+  if (type === "quiz") {
+    return {
+      instructionLabel: "퀴즈 안내",
+      scriptLabel: "퀴즈 보조 설명",
+      imageLabel: "파트 공통 이미지",
+      audioLabel: "파트 공통 오디오",
+      helper: "Quiz Part 하나에 여러 문제를 추가할 수 있습니다.",
+      submitLabel: "답안 수",
+    };
+  }
   return {
     instructionLabel: "설명",
     scriptLabel: "상세 내용",
@@ -230,6 +293,7 @@ function createPart(type: AssignmentType | "", index: number): AssignmentPartSta
     imageFiles: [],
     audioFiles: [],
     attachments: [],
+    quizQuestions: partType === "quiz" ? [createQuizQuestion(0)] : [],
   };
 }
 
@@ -421,13 +485,20 @@ function SaveAlertModal({
 
 function responseErrorMessage(data: unknown, response?: Response, responseText = "") {
   const fallback = "입력한 내용을 확인한 뒤 다시 시도해주세요.";
+  const lines: string[] = [];
+  if (response) lines.push(`HTTP ${response.status}`);
   if (data && typeof data === "object") {
     const error = (data as { error?: unknown }).error;
-    if (typeof error === "string") return error.trim() || fallback;
+    if (typeof error === "string" && error.trim()) lines.push(error.trim());
     if (Array.isArray(error)) {
       const messages = error.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
-      return messages.length > 0 ? messages.join("\n") : fallback;
+      lines.push(...messages);
     }
+    for (const key of ["code", "detail", "hint", "constraint", "table", "column"] as const) {
+      const value = (data as Record<string, unknown>)[key];
+      if (typeof value === "string" && value.trim()) lines.push(`${key}: ${value.trim()}`);
+    }
+    if (lines.length > 0) return lines.join("\n");
   }
   if (response?.status === 413) {
     return "첨부 파일 용량이 서버에서 허용하는 크기를 초과했습니다. 파일을 압축하거나 개수를 줄여주세요.";
@@ -435,7 +506,7 @@ function responseErrorMessage(data: unknown, response?: Response, responseText =
   if (response && response.status >= 400) {
     const plainText = responseText.trim();
     if (plainText && plainText.length < 300 && !plainText.startsWith("<")) return plainText;
-    return `${fallback}\n상태 코드: ${response.status}`;
+    return `${fallback}\nHTTP ${response.status}`;
   }
   return fallback;
 }
@@ -471,6 +542,15 @@ function validatePart(part: AssignmentPartState, index: number) {
   }
   if ((part.partType === "vocabulary_example" || part.partType === "vocabulary_recording") && validVocabularyRows(part.vocabularyRows).length === 0) {
     return `${prefix}: 단어와 뜻이 입력된 항목을 1개 이상 추가해주세요.`;
+  }
+  if (part.partType === "quiz") {
+    if (part.quizQuestions.length === 0) return `${prefix}: 퀴즈 문제를 1개 이상 추가해주세요.`;
+    for (const [questionIndex, question] of part.quizQuestions.entries()) {
+      if (!question.questionText.trim()) return `${prefix} Q${questionIndex + 1}: 문제 문장을 입력해주세요.`;
+      const choices = question.choices.filter((choice) => choice.choiceText.trim());
+      if (choices.length < 2) return `${prefix} Q${questionIndex + 1}: 선택지를 2개 이상 입력해주세요.`;
+      if (choices.filter((choice) => choice.isCorrect).length !== 1) return `${prefix} Q${questionIndex + 1}: 정답을 정확히 1개 선택해주세요.`;
+    }
   }
 
   return null;
@@ -508,6 +588,20 @@ function validateUploadSize(template: TemplateState) {
       }
       if (file.size > MAX_AUDIO_FILE_BYTES) {
         return `${partName}: 오디오 파일 "${file.name}"의 용량이 ${formatFileSize(file.size)}입니다.\n오디오는 1개당 최대 ${formatFileSize(MAX_AUDIO_FILE_BYTES)}까지 업로드할 수 있습니다.`;
+      }
+    }
+
+    for (const [questionIndex, question] of part.quizQuestions.entries()) {
+      const questionName = `${partName} Q${questionIndex + 1}`;
+      for (const file of question.imageFiles) {
+        totalBytes += file.size;
+        if (!isSupportedImageFile(file)) return `${questionName}: 이미지 파일 "${file.name}"의 형식을 확인해주세요.`;
+        if (file.size > MAX_IMAGE_FILE_BYTES) return `${questionName}: 이미지는 1개당 최대 ${formatFileSize(MAX_IMAGE_FILE_BYTES)}까지 업로드할 수 있습니다.`;
+      }
+      for (const file of question.audioFiles) {
+        totalBytes += file.size;
+        if (!isSupportedAudioFile(file)) return `${questionName}: 오디오 파일 "${file.name}"의 형식을 확인해주세요.`;
+        if (file.size > MAX_AUDIO_FILE_BYTES) return `${questionName}: 오디오는 1개당 최대 ${formatFileSize(MAX_AUDIO_FILE_BYTES)}까지 업로드할 수 있습니다.`;
       }
     }
   }
@@ -588,6 +682,13 @@ function NewAssignmentForm() {
                 minSubmissionCount?: number;
                 maxSubmissionCount?: number;
                 attachments?: AssignmentPartAttachmentState[];
+                quizQuestions?: Array<{
+                  id?: string;
+                  questionText?: string;
+                  explanation?: string;
+                  choices?: QuizChoiceState[];
+                  attachments?: QuizQuestionAttachmentState[];
+                }>;
               }, index: number) => ({
                 id: part.id,
                 partType: part.partType ?? createPart(data.assignment.type ?? "listening_recording", index).partType,
@@ -608,6 +709,27 @@ function NewAssignmentForm() {
                 imageFiles: [],
                 audioFiles: [],
                 attachments: part.attachments ?? [],
+                quizQuestions: part.partType === "quiz"
+                  ? (part.quizQuestions?.length
+                    ? part.quizQuestions.map((question, questionIndex) => ({
+                        id: question.id,
+                        questionText: question.questionText ?? "",
+                        explanation: question.explanation ?? "",
+                        choices: question.choices?.length
+                          ? question.choices.map((choice, choiceIndex) => ({
+                              id: choice.id,
+                              choiceLabel: choice.choiceLabel || String(choiceIndex + 1),
+                              choiceText: choice.choiceText,
+                              isCorrect: choice.isCorrect,
+                              incorrectReason: choice.incorrectReason ?? "",
+                            }))
+                          : [createQuizChoice(0, true), createQuizChoice(1)],
+                        imageFiles: [],
+                        audioFiles: [],
+                        attachments: question.attachments ?? [],
+                      }))
+                    : [createQuizQuestion(0)])
+                  : [],
               }))
           : [createLegacyPart(data.assignment, 0)],
       });
@@ -641,6 +763,9 @@ function NewAssignmentForm() {
           nextPart.maxSubmissionCount = "1";
           nextPart.vocabularyRows = patch.partType === "vocabulary_example" || patch.partType === "vocabulary_recording"
             ? (part.vocabularyRows.length ? part.vocabularyRows : defaultVocabularyRows())
+            : [];
+          nextPart.quizQuestions = patch.partType === "quiz"
+            ? (part.quizQuestions.length ? part.quizQuestions : [createQuizQuestion(0)])
             : [];
         }
         return nextPart;
@@ -684,6 +809,66 @@ function NewAssignmentForm() {
     updatePart(partIndex, {
       vocabularyRows: part.vocabularyRows.filter((_, index) => index !== rowIndex),
     });
+  }
+
+  function updateQuizQuestion(partIndex: number, questionIndex: number, patch: Partial<QuizQuestionState>) {
+    const part = template.parts[partIndex];
+    updatePart(partIndex, {
+      quizQuestions: part.quizQuestions.map((question, index) => index === questionIndex ? { ...question, ...patch } : question),
+    });
+  }
+
+  function addQuizQuestion(partIndex: number) {
+    const part = template.parts[partIndex];
+    updatePart(partIndex, {
+      quizQuestions: [...part.quizQuestions, createQuizQuestion(part.quizQuestions.length)],
+    });
+  }
+
+  function removeQuizQuestion(partIndex: number, questionIndex: number) {
+    const part = template.parts[partIndex];
+    updatePart(partIndex, {
+      quizQuestions: part.quizQuestions.length <= 1
+        ? part.quizQuestions
+        : part.quizQuestions.filter((_, index) => index !== questionIndex),
+    });
+  }
+
+  function updateQuizChoice(partIndex: number, questionIndex: number, choiceIndex: number, patch: Partial<QuizChoiceState>) {
+    const question = template.parts[partIndex].quizQuestions[questionIndex];
+    updateQuizQuestion(partIndex, questionIndex, {
+      choices: question.choices.map((choice, index) => index === choiceIndex ? { ...choice, ...patch } : choice),
+    });
+  }
+
+  function setCorrectQuizChoice(partIndex: number, questionIndex: number, choiceIndex: number) {
+    const question = template.parts[partIndex].quizQuestions[questionIndex];
+    updateQuizQuestion(partIndex, questionIndex, {
+      choices: question.choices.map((choice, index) => ({ ...choice, isCorrect: index === choiceIndex })),
+    });
+  }
+
+  function addQuizChoice(partIndex: number, questionIndex: number) {
+    const question = template.parts[partIndex].quizQuestions[questionIndex];
+    if (question.choices.length >= 6) return;
+    updateQuizQuestion(partIndex, questionIndex, {
+      choices: [...question.choices, createQuizChoice(question.choices.length)],
+    });
+  }
+
+  function removeQuizChoice(partIndex: number, questionIndex: number, choiceIndex: number) {
+    const question = template.parts[partIndex].quizQuestions[questionIndex];
+    if (question.choices.length <= 2) return;
+    const nextChoices = question.choices.filter((_, index) => index !== choiceIndex).map((choice, index) => ({
+      ...choice,
+      choiceLabel: String(index + 1),
+    }));
+    if (!nextChoices.some((choice) => choice.isCorrect)) nextChoices[0].isCorrect = true;
+    updateQuizQuestion(partIndex, questionIndex, { choices: nextChoices });
+  }
+
+  function updateQuizQuestionFiles(partIndex: number, questionIndex: number, kind: "imageFiles" | "audioFiles", files: FileList | null) {
+    updateQuizQuestion(partIndex, questionIndex, { [kind]: Array.from(files ?? []) } as Partial<QuizQuestionState>);
   }
 
   function saveAssignment() {
@@ -743,6 +928,22 @@ function NewAssignmentForm() {
         writingHint: part.writingHint,
         writingExample: part.writingExample,
         vocabularyRows: validVocabularyRows(part.vocabularyRows),
+        quizQuestions: part.partType === "quiz"
+          ? part.quizQuestions.map((question, questionIndex) => ({
+              id: question.id,
+              questionText: question.questionText,
+              explanation: question.explanation,
+              orderIndex: questionIndex,
+              choices: question.choices.map((choice, choiceIndex) => ({
+                id: choice.id,
+                choiceLabel: choice.choiceLabel || String(choiceIndex + 1),
+                choiceText: choice.choiceText,
+                isCorrect: choice.isCorrect,
+                incorrectReason: choice.incorrectReason,
+                orderIndex: choiceIndex,
+              })),
+            }))
+          : [],
         isRequired: part.isRequired,
         allowSubmission: part.allowSubmission,
         minSubmissionCount: Number(part.minSubmissionCount),
@@ -752,6 +953,10 @@ function NewAssignmentForm() {
       template.parts.forEach((part, index) => {
         part.imageFiles.forEach((file) => formData.append(`partImageFiles[${index}]`, file, file.name));
         part.audioFiles.forEach((file) => formData.append(`partAudioFiles[${index}]`, file, file.name));
+        part.quizQuestions.forEach((question, questionIndex) => {
+          question.imageFiles.forEach((file) => formData.append(`quizQuestionImageFiles[${index}][${questionIndex}]`, file, file.name));
+          question.audioFiles.forEach((file) => formData.append(`quizQuestionAudioFiles[${index}][${questionIndex}]`, file, file.name));
+        });
       });
       const response = await fetch("/api/teacher/assignments", { method: "POST", body: formData });
       const responseText = await response.text();
@@ -891,61 +1096,130 @@ function NewAssignmentForm() {
                       </section>
                     )}
 
+                    {part.partType === "quiz" && (
+                      <section className="grid gap-4 rounded-md border border-line bg-slate-50 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <h4 className="font-bold">퀴즈 문제 목록</h4>
+                          <Button type="button" variant="secondary" onClick={() => addQuizQuestion(index)}>문제 추가</Button>
+                        </div>
+                        {part.quizQuestions.map((question, questionIndex) => (
+                          <article key={question.id ?? questionIndex} className="grid gap-4 rounded-lg border border-line bg-white p-4">
+                            <div className="flex items-center justify-between gap-3">
+                              <Badge tone="blue">Q{questionIndex + 1}</Badge>
+                              <Button type="button" variant="danger" onClick={() => removeQuizQuestion(index, questionIndex)} disabled={part.quizQuestions.length <= 1}>문제 삭제</Button>
+                            </div>
+                            <label className="grid gap-2 text-sm font-semibold">
+                              문제 문장
+                              <Textarea value={question.questionText} onChange={(event) => updateQuizQuestion(index, questionIndex, { questionText: event.target.value })} placeholder="_pple 안에 들어갈 알파벳을 고르시오." />
+                            </label>
+                            <label className="grid gap-2 text-sm font-semibold">
+                              정답 설명
+                              <Textarea value={question.explanation} onChange={(event) => updateQuizQuestion(index, questionIndex, { explanation: event.target.value })} placeholder="apple은 a로 시작합니다." />
+                            </label>
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <label className="grid gap-2 text-sm font-semibold">
+                                문제 이미지
+                                <Input type="file" accept="image/*,.heic,.heif,.bmp,.tif,.tiff,.svg" onChange={(event) => updateQuizQuestionFiles(index, questionIndex, "imageFiles", event.target.files)} />
+                                <PartFileSummary
+                                  kind="image"
+                                  selectedFiles={question.imageFiles}
+                                  attachments={question.attachments.filter((attachment) => attachment.attachmentType === "image")}
+                                />
+                              </label>
+                              <label className="grid gap-2 text-sm font-semibold">
+                                문제 오디오
+                                <Input type="file" accept="audio/*,.m4a,.aac,.aif,.aiff,.caf,.flac,.amr,.oga,.ogg,.webm,.wav,.mp3" onChange={(event) => updateQuizQuestionFiles(index, questionIndex, "audioFiles", event.target.files)} />
+                                <PartFileSummary
+                                  kind="audio"
+                                  selectedFiles={question.audioFiles}
+                                  attachments={question.attachments.filter((attachment) => attachment.attachmentType === "audio")}
+                                />
+                              </label>
+                            </div>
+                            <div className="grid gap-2">
+                              <div className="flex items-center justify-between gap-3">
+                                <h5 className="font-bold">선택지</h5>
+                                <Button type="button" variant="secondary" onClick={() => addQuizChoice(index, questionIndex)} disabled={question.choices.length >= 6}>선택지 추가</Button>
+                              </div>
+                              {question.choices.map((choice, choiceIndex) => (
+                                <div key={choice.id ?? choiceIndex} className="grid gap-2 rounded-md border border-line bg-slate-50 p-3 lg:grid-cols-[auto_56px_1fr_1.4fr_auto] lg:items-center">
+                                  <label className="flex items-center gap-2 text-sm font-bold">
+                                    <input type="radio" checked={choice.isCorrect} onChange={() => setCorrectQuizChoice(index, questionIndex, choiceIndex)} />
+                                    정답
+                                  </label>
+                                  <Input value={choice.choiceLabel} onChange={(event) => updateQuizChoice(index, questionIndex, choiceIndex, { choiceLabel: event.target.value })} placeholder="1" />
+                                  <Input value={choice.choiceText} onChange={(event) => updateQuizChoice(index, questionIndex, choiceIndex, { choiceText: event.target.value })} placeholder="a" />
+                                  <Input value={choice.incorrectReason} onChange={(event) => updateQuizChoice(index, questionIndex, choiceIndex, { incorrectReason: event.target.value })} placeholder="오답 이유" />
+                                  <Button type="button" variant="secondary" onClick={() => removeQuizChoice(index, questionIndex, choiceIndex)} disabled={question.choices.length <= 2}>삭제</Button>
+                                </div>
+                              ))}
+                            </div>
+                          </article>
+                        ))}
+                      </section>
+                    )}
+
                     <label className="grid gap-2 text-sm font-semibold">
                       {copy.instructionLabel}
                       <Textarea value={part.instruction} onChange={(event) => updatePart(index, { instruction: event.target.value })} />
                     </label>
 
-                    <label className="grid gap-2 text-sm font-semibold">
-                      {copy.scriptLabel}
-                      <Textarea value={part.scriptText} onChange={(event) => updatePart(index, { scriptText: event.target.value })} />
-                    </label>
+                    {part.partType !== "quiz" && (
+                      <>
+                        <label className="grid gap-2 text-sm font-semibold">
+                          {copy.scriptLabel}
+                          <Textarea value={part.scriptText} onChange={(event) => updatePart(index, { scriptText: event.target.value })} />
+                        </label>
 
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <label className="grid gap-2 text-sm font-semibold">
-                        {copy.imageLabel}
-                        <Input type="file" accept="image/*,.heic,.heif,.bmp,.tif,.tiff,.svg" multiple onChange={(event) => updatePartFiles(index, "imageFiles", event.target.files)} />
-                        <p className="text-xs font-semibold text-slate-500">
-                          이미지 1개당 최대 {formatFileSize(MAX_IMAGE_FILE_BYTES)}, 첨부 전체 최대 {formatFileSize(MAX_ASSIGNMENT_UPLOAD_BYTES)}
-                        </p>
-                        <PartFileSummary
-                          kind="image"
-                          selectedFiles={part.imageFiles}
-                          attachments={part.attachments.filter((attachment) => attachment.attachmentType === "image")}
-                        />
-                      </label>
-                      <label className="grid gap-2 text-sm font-semibold">
-                        {copy.audioLabel}
-                        <Input type="file" accept="audio/*,.m4a,.aac,.aif,.aiff,.caf,.flac,.amr,.oga,.ogg,.webm,.wav,.mp3" multiple onChange={(event) => updatePartFiles(index, "audioFiles", event.target.files)} />
-                        <p className="text-xs font-semibold text-slate-500">
-                          오디오 1개당 최대 {formatFileSize(MAX_AUDIO_FILE_BYTES)}, 첨부 전체 최대 {formatFileSize(MAX_ASSIGNMENT_UPLOAD_BYTES)}
-                        </p>
-                        <PartFileSummary
-                          kind="audio"
-                          selectedFiles={part.audioFiles}
-                          attachments={part.attachments.filter((attachment) => attachment.attachmentType === "audio")}
-                        />
-                      </label>
-                    </div>
-
-                    <div className={`grid gap-4 ${part.allowSubmission ? "md:grid-cols-3" : "md:grid-cols-1"}`}>
-                      <label className="flex items-center gap-2 text-sm font-semibold">
-                        <input type="checkbox" checked={part.isRequired} onChange={(event) => updatePart(index, { isRequired: event.target.checked })} />
-                        필수 파트
-                      </label>
-                      {part.allowSubmission && (
-                        <>
+                        <div className="grid gap-4 md:grid-cols-2">
                           <label className="grid gap-2 text-sm font-semibold">
-                            최소 {copy.submitLabel}
-                            <Input type="number" min="0" value={part.minSubmissionCount} onChange={(event) => updatePart(index, { minSubmissionCount: event.target.value })} />
+                            {copy.imageLabel}
+                            <Input type="file" accept="image/*,.heic,.heif,.bmp,.tif,.tiff,.svg" multiple onChange={(event) => updatePartFiles(index, "imageFiles", event.target.files)} />
+                            <p className="text-xs font-semibold text-slate-500">
+                              이미지 1개당 최대 {formatFileSize(MAX_IMAGE_FILE_BYTES)}, 첨부 전체 최대 {formatFileSize(MAX_ASSIGNMENT_UPLOAD_BYTES)}
+                            </p>
+                            <PartFileSummary
+                              kind="image"
+                              selectedFiles={part.imageFiles}
+                              attachments={part.attachments.filter((attachment) => attachment.attachmentType === "image")}
+                            />
                           </label>
                           <label className="grid gap-2 text-sm font-semibold">
-                            최대 {copy.submitLabel}
-                            <Input type="number" min="1" value={part.maxSubmissionCount} onChange={(event) => updatePart(index, { maxSubmissionCount: event.target.value })} />
+                            {copy.audioLabel}
+                            <Input type="file" accept="audio/*,.m4a,.aac,.aif,.aiff,.caf,.flac,.amr,.oga,.ogg,.webm,.wav,.mp3" multiple onChange={(event) => updatePartFiles(index, "audioFiles", event.target.files)} />
+                            <p className="text-xs font-semibold text-slate-500">
+                              오디오 1개당 최대 {formatFileSize(MAX_AUDIO_FILE_BYTES)}, 첨부 전체 최대 {formatFileSize(MAX_ASSIGNMENT_UPLOAD_BYTES)}
+                            </p>
+                            <PartFileSummary
+                              kind="audio"
+                              selectedFiles={part.audioFiles}
+                              attachments={part.attachments.filter((attachment) => attachment.attachmentType === "audio")}
+                            />
                           </label>
-                        </>
-                      )}
-                    </div>
+                        </div>
+                      </>
+                    )}
+
+                    {part.partType !== "quiz" && (
+                      <div className={`grid gap-4 ${part.allowSubmission ? "md:grid-cols-3" : "md:grid-cols-1"}`}>
+                        <label className="flex items-center gap-2 text-sm font-semibold">
+                          <input type="checkbox" checked={part.isRequired} onChange={(event) => updatePart(index, { isRequired: event.target.checked })} />
+                          필수 파트
+                        </label>
+                        {part.allowSubmission && (
+                          <>
+                            <label className="grid gap-2 text-sm font-semibold">
+                              최소 {copy.submitLabel}
+                              <Input type="number" min="0" value={part.minSubmissionCount} onChange={(event) => updatePart(index, { minSubmissionCount: event.target.value })} />
+                            </label>
+                            <label className="grid gap-2 text-sm font-semibold">
+                              최대 {copy.submitLabel}
+                              <Input type="number" min="1" value={part.maxSubmissionCount} onChange={(event) => updatePart(index, { maxSubmissionCount: event.target.value })} />
+                            </label>
+                          </>
+                        )}
+                      </div>
+                    )}
                         </>
                       );
                     })()}

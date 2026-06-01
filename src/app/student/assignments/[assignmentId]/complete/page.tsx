@@ -9,7 +9,7 @@ import { studentAssignmentRepository } from "@/features/assignments/repositories
 import { assignmentTypeLabel, normalizeAssignmentType } from "@/lib/assignmentTypes";
 import { formatDateTime, formatDue } from "@/lib/format";
 import { getStudentSession } from "@/server/auth/studentSession";
-import type { AssignmentSubmissionPart } from "@/types/assignment";
+import type { Assignment, AssignmentSubmissionPart } from "@/types/assignment";
 
 function statusLabel(status?: string) {
   if (status === "reviewed" || status === "completed") return "완료";
@@ -56,12 +56,58 @@ function partTypeLabel(type?: string) {
   if (type === "recording") return "녹음 제출";
   if (type === "writing") return "라이팅";
   if (type === "photo_submission") return "사진 제출";
+  if (type === "quiz") return "퀴즈";
   if (type === "vocabulary_example") return "단어 예문";
   if (type === "vocabulary_recording") return "단어 녹음";
   return "Part";
 }
 
-function MultiPartSubmissionView({ parts }: { parts: AssignmentSubmissionPart[] }) {
+function QuizResultView({
+  submissionPart,
+  assignmentPart,
+}: {
+  submissionPart: AssignmentSubmissionPart;
+  assignmentPart?: NonNullable<Assignment["parts"]>[number];
+}) {
+  const answers = submissionPart.quizAnswers ?? [];
+  const questions = assignmentPart?.quizQuestions ?? [];
+  const correctCount = answers.filter((answer) => answer.isCorrect).length;
+
+  return (
+    <div className="mt-4 grid gap-3">
+      <div className="rounded-lg bg-green-50 p-4 text-lg font-extrabold text-green-700">
+        총 {questions.length || answers.length}문제 중 {correctCount}개 정답
+      </div>
+      {questions.map((question, index) => {
+        const answer = answers.find((item) => item.questionId === question.id);
+        const selected = question.choices.find((choice) => choice.id === answer?.selectedChoiceId);
+        const correct = question.choices.find((choice) => choice.isCorrect);
+        return (
+          <article key={question.id} className="rounded-lg border border-line p-4">
+            <div className="flex flex-wrap gap-2">
+              <Badge tone="blue">Q{index + 1}</Badge>
+              <Badge tone={answer?.isCorrect ? "green" : "yellow"}>{answer?.isCorrect ? "정답" : "오답"}</Badge>
+            </div>
+            <p className="mt-3 text-lg font-bold">{question.questionText}</p>
+            <div className="mt-3 grid gap-2 text-sm font-semibold text-slate-700">
+              <p>내 답: {selected ? `${selected.choiceLabel}. ${selected.choiceText}` : "-"}</p>
+              {!answer?.isCorrect && <p>정답: {correct ? `${correct.choiceLabel}. ${correct.choiceText}` : "-"}</p>}
+              {!answer?.isCorrect && selected?.incorrectReason && <p className="rounded-md bg-red-50 p-3 text-red-700">이유: {selected.incorrectReason}</p>}
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
+function MultiPartSubmissionView({
+  parts,
+  assignmentParts,
+}: {
+  parts: AssignmentSubmissionPart[];
+  assignmentParts: Assignment["parts"];
+}) {
   return (
     <div className="grid gap-4">
       {parts.map((part, index) => {
@@ -74,6 +120,9 @@ function MultiPartSubmissionView({ parts }: { parts: AssignmentSubmissionPart[] 
               <Badge tone="green">{partTypeLabel(part.partType)}</Badge>
             </div>
             <h2 className="mt-3 text-lg font-bold">{part.title || `Part ${index + 1}`}</h2>
+            {part.partType === "quiz" && (
+              <QuizResultView submissionPart={part} assignmentPart={assignmentParts?.find((assignmentPart) => assignmentPart.id === part.assignmentPartId)} />
+            )}
             {part.scriptText && <p className="mt-3 whitespace-pre-wrap rounded-lg bg-paper p-4 leading-7">{part.scriptText}</p>}
 
             {(part.originalAnswerText || part.answerText || part.aiCorrectedText) && (
@@ -182,7 +231,7 @@ export default async function CompletePage({ params }: { params: Promise<{ assig
           )}
         </Card>
 
-        {isMultiPartSubmission && <MultiPartSubmissionView parts={submittedParts} />}
+        {isMultiPartSubmission && <MultiPartSubmissionView parts={submittedParts} assignmentParts={assignment.parts ?? []} />}
 
         {!isMultiPartSubmission && type === "listening_recording" && (
           <>

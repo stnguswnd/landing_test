@@ -13,6 +13,7 @@ import type { Assignment } from "@/types/assignment";
 import { ListeningHomework } from "./ListeningHomework";
 import type { PartSavePayload } from "./partMode";
 import { PhotoSubmissionHomework } from "./PhotoSubmissionHomework";
+import { QuizPartPlayer } from "./QuizPartPlayer";
 import { RlRecordingHomework } from "./RlRecordingHomework";
 import { VocabularyExampleHomework } from "./VocabularyExampleHomework";
 import { VocabularyRecordingHomework } from "./VocabularyRecordingHomework";
@@ -27,12 +28,14 @@ function partTypeLabel(type: AssignmentPart["partType"]) {
   if (type === "recording") return "녹음 제출 숙제";
   if (type === "writing") return "라이팅 숙제";
   if (type === "photo_submission") return "사진 제출 숙제";
+  if (type === "quiz") return "퀴즈 숙제";
   if (type === "vocabulary_example") return "단어 예문 숙제";
   return "단어 녹음 숙제";
 }
 
 function assignmentTypeForPart(part: AssignmentPart): Assignment["assignmentType"] {
   if (part.partType === "photo_submission") return "photo_submission";
+  if (part.partType === "quiz") return "quiz";
   if (part.partType === "listening") return "listening";
   if (part.partType === "writing") return "writing";
   if (part.partType === "vocabulary_example") return "vocabulary_example";
@@ -42,6 +45,7 @@ function assignmentTypeForPart(part: AssignmentPart): Assignment["assignmentType
 
 function itemTypeForPart(part: AssignmentPart) {
   if (part.partType === "photo_submission") return "photo_submission";
+  if (part.partType === "quiz") return "quiz_prompt";
   if (part.partType === "listening") return "listening";
   if (part.partType === "writing") return "writing_prompt";
   if (part.partType === "vocabulary_example") return "vocabulary_example";
@@ -122,6 +126,9 @@ function HomeworkByPart({
         draftAttachments={draftAttachments}
       />
     );
+  }
+  if (assignmentType === "quiz") {
+    return <QuizPartPlayer assignment={assignment} part={part} partMode={partMode} />;
   }
   if (assignmentType === "listening") return <ListeningHomework assignment={{ ...effectiveAssignment, assignmentType }} partMode={partMode} />;
   if (assignmentType === "writing") return <WritingHomework assignment={{ ...effectiveAssignment, assignmentType }} partMode={partMode} draftData={draftData} />;

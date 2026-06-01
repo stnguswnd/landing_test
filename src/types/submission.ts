@@ -5,6 +5,7 @@ export type Submission = {
   status: "not_submitted" | "submitted" | "reviewed" | "returned";
   submittedAt?: string;
   items: SubmissionItem[];
+  quizAnswers?: SubmissionQuizAnswer[];
   teacherComment?: string;
   reviewedAt?: string;
 };
@@ -37,4 +38,16 @@ export type SubmissionItemAttachment = {
   widthPx?: number;
   heightPx?: number;
   orderIndex: number;
+};
+
+export type SubmissionQuizAnswer = {
+  id: string;
+  submissionId: string;
+  submissionItemId?: string;
+  assignmentPartId: string;
+  questionId: string;
+  selectedChoiceId?: string;
+  answerText?: string;
+  isCorrect?: boolean;
+  answeredAt: string;
 };

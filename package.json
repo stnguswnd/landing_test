@@ -15,6 +15,7 @@
     "apply:assignment-parts": "node scripts/apply-assignment-parts.mjs",
     "apply:assignment-drafts": "node scripts/apply-student-assignment-drafts.mjs",
     "apply:ai-feedback-attempts": "node scripts/apply-ai-feedback-attempts.mjs",
+    "apply:quiz-assignments": "node scripts/apply-quiz-assignments.mjs",
     "lint": "next lint"
   },
   "dependencies": {

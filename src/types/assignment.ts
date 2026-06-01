@@ -42,6 +42,7 @@ export type AssignmentSubmissionPart = {
   aiGrammarNotes?: string;
   aiExpressionNotes?: string;
   attachments?: SubmissionItemAttachment[];
+  quizAnswers?: SubmissionQuizAnswer[];
 };
 
 export type StudentAssignmentDraft = {
@@ -76,7 +77,7 @@ export type StudentAssignmentDraftAttachment = {
 export type AssignmentPart = {
   id: string;
   assignmentId: string;
-  partType: "instruction" | "listening" | "recording" | "writing" | "photo_submission" | "vocabulary_example" | "vocabulary_recording";
+  partType: "instruction" | "listening" | "recording" | "writing" | "photo_submission" | "vocabulary_example" | "vocabulary_recording" | "quiz";
   title?: string;
   instruction?: string;
   scriptText?: string;
@@ -92,6 +93,55 @@ export type AssignmentPart = {
   orderIndex: number;
   status: "active" | "archived";
   attachments?: AssignmentPartAttachment[];
+  quizQuestions?: QuizQuestion[];
+};
+
+export type QuizQuestion = {
+  id: string;
+  assignmentPartId: string;
+  questionText: string;
+  explanation?: string;
+  orderIndex: number;
+  choices: QuizChoice[];
+  attachments?: QuizQuestionAttachment[];
+};
+
+export type QuizChoice = {
+  id: string;
+  questionId: string;
+  choiceLabel?: string;
+  choiceText: string;
+  isCorrect: boolean;
+  incorrectReason?: string;
+  orderIndex: number;
+};
+
+export type QuizQuestionAttachment = {
+  id: string;
+  questionId: string;
+  attachmentType: "image" | "audio" | "video" | "file";
+  storageBucket: string;
+  storagePath: string;
+  fileUrl?: string;
+  fileName?: string;
+  mimeType?: string;
+  fileSizeBytes?: number;
+  durationSec?: number;
+  widthPx?: number;
+  heightPx?: number;
+  orderIndex: number;
+};
+
+export type SubmissionQuizAnswer = {
+  id: string;
+  submissionId: string;
+  submissionItemId?: string;
+  assignmentPartId: string;
+  questionId: string;
+  selectedChoiceId?: string;
+  answerText?: string;
+  isCorrect?: boolean;
+  answeredAt: string;
 };
 
 export type AssignmentPartAttachment = {

@@ -57,10 +57,46 @@ type AttachmentRow = {
   order_index: number;
 };
 
+type QuizQuestionRow = {
+  id: string;
+  assignment_part_id: string;
+  question_text: string;
+  explanation: string | null;
+  order_index: number;
+  choices: QuizChoiceRow[] | null;
+  attachments: QuizQuestionAttachmentRow[] | null;
+};
+
+type QuizChoiceRow = {
+  id: string;
+  question_id: string;
+  choice_label: string | null;
+  choice_text: string;
+  is_correct: boolean;
+  incorrect_reason: string | null;
+  order_index: number;
+};
+
+type QuizQuestionAttachmentRow = {
+  id: string;
+  question_id: string;
+  attachment_type: "image" | "audio" | "video" | "file";
+  storage_bucket: string;
+  storage_path: string;
+  file_url: string | null;
+  file_name: string | null;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  duration_sec: number | null;
+  width_px: number | null;
+  height_px: number | null;
+  order_index: number;
+};
+
 type AssignmentPartRow = {
   id: string;
   assignment_id: string;
-  part_type: "instruction" | "listening" | "recording" | "writing" | "photo_submission" | "vocabulary_example" | "vocabulary_recording";
+  part_type: "instruction" | "listening" | "recording" | "writing" | "photo_submission" | "vocabulary_example" | "vocabulary_recording" | "quiz";
   title: string | null;
   instruction: string | null;
   script_text: string | null;
@@ -76,6 +112,7 @@ type AssignmentPartRow = {
   status: "active" | "archived";
   attachments: AssignmentPartAttachmentRow[] | null;
   vocabulary_items: AssignmentRow["vocabulary_items"] | null;
+  quiz_questions: QuizQuestionRow[] | null;
 };
 
 type AssignmentPartAttachmentRow = {
@@ -135,6 +172,19 @@ type SubmissionPartRow = {
   ai_grammar_notes: string | null;
   ai_expression_notes: string | null;
   attachments: AttachmentRow[] | null;
+  quiz_answers: SubmissionQuizAnswerRow[] | null;
+};
+
+type SubmissionQuizAnswerRow = {
+  id: string;
+  submission_id: string;
+  submission_item_id: string | null;
+  assignment_part_id: string;
+  question_id: string;
+  selected_choice_id: string | null;
+  answer_text: string | null;
+  is_correct: boolean | null;
+  answered_at: string;
 };
 
 type AssignmentRow = {
@@ -218,6 +268,44 @@ async function mapPartAttachment(row: AssignmentPartAttachmentRow) {
     fileName: row.file_name ?? undefined,
     fileUrl: ((await signedUrl(row.storage_bucket, row.storage_path)) || row.file_url) ?? undefined,
     orderIndex: row.order_index,
+  };
+}
+
+async function mapQuizQuestionAttachment(row: QuizQuestionAttachmentRow) {
+  return {
+    id: row.id,
+    questionId: row.question_id,
+    attachmentType: row.attachment_type,
+    storageBucket: row.storage_bucket,
+    storagePath: row.storage_path,
+    fileUrl: ((await signedUrl(row.storage_bucket, row.storage_path)) || row.file_url) ?? undefined,
+    fileName: row.file_name ?? undefined,
+    mimeType: row.mime_type ?? undefined,
+    fileSizeBytes: row.file_size_bytes ?? undefined,
+    durationSec: row.duration_sec ?? undefined,
+    widthPx: row.width_px ?? undefined,
+    heightPx: row.height_px ?? undefined,
+    orderIndex: row.order_index,
+  };
+}
+
+async function mapQuizQuestion(row: QuizQuestionRow) {
+  return {
+    id: row.id,
+    assignmentPartId: row.assignment_part_id,
+    questionText: row.question_text,
+    explanation: row.explanation ?? undefined,
+    orderIndex: row.order_index,
+    choices: (row.choices ?? []).map((choice) => ({
+      id: choice.id,
+      questionId: choice.question_id,
+      choiceLabel: choice.choice_label ?? undefined,
+      choiceText: choice.choice_text,
+      isCorrect: choice.is_correct,
+      incorrectReason: choice.incorrect_reason ?? undefined,
+      orderIndex: choice.order_index,
+    })),
+    attachments: await Promise.all((row.attachments ?? []).map(mapQuizQuestionAttachment)),
   };
 }
 
@@ -335,6 +423,7 @@ async function mapAssignmentWithSignedUrls(row: AssignmentRow): Promise<Assignme
       orderIndex: part.order_index,
       status: part.status,
       attachments: await Promise.all((part.attachments ?? []).map(mapPartAttachment)),
+      quizQuestions: await Promise.all((part.quiz_questions ?? []).map(mapQuizQuestion)),
     }))),
     submissionParts: await Promise.all((row.submission_parts ?? []).map(async (part) => ({
       id: part.id,
@@ -352,6 +441,17 @@ async function mapAssignmentWithSignedUrls(row: AssignmentRow): Promise<Assignme
       aiGrammarNotes: part.ai_grammar_notes ?? undefined,
       aiExpressionNotes: part.ai_expression_notes ?? undefined,
       attachments: await Promise.all((part.attachments ?? []).map(mapAttachment)),
+      quizAnswers: (part.quiz_answers ?? []).map((answer) => ({
+        id: answer.id,
+        submissionId: answer.submission_id,
+        submissionItemId: answer.submission_item_id ?? undefined,
+        assignmentPartId: answer.assignment_part_id,
+        questionId: answer.question_id,
+        selectedChoiceId: answer.selected_choice_id ?? undefined,
+        answerText: answer.answer_text ?? undefined,
+        isCorrect: answer.is_correct ?? undefined,
+        answeredAt: new Date(answer.answered_at).toISOString(),
+      })),
     }))),
     draft: row.draft
       ? {
@@ -555,6 +655,67 @@ export const studentAssignmentRepository = {
                       where avi.assignment_part_id = ap.id
                     ),
                     '[]'::json
+                  ),
+                  'quiz_questions', coalesce(
+                    (
+                      select json_agg(
+                        json_build_object(
+                          'id', aqq.id,
+                          'assignment_part_id', aqq.assignment_part_id,
+                          'question_text', aqq.question_text,
+                          'explanation', aqq.explanation,
+                          'order_index', aqq.order_index,
+                          'choices', coalesce(
+                            (
+                              select json_agg(
+                                json_build_object(
+                                  'id', aqc.id,
+                                  'question_id', aqc.question_id,
+                                  'choice_label', aqc.choice_label,
+                                  'choice_text', aqc.choice_text,
+                                  'is_correct', aqc.is_correct,
+                                  'incorrect_reason', aqc.incorrect_reason,
+                                  'order_index', aqc.order_index
+                                )
+                                order by aqc.order_index
+                              )
+                              from assignment_quiz_choices aqc
+                              where aqc.question_id = aqq.id
+                            ),
+                            '[]'::json
+                          ),
+                          'attachments', coalesce(
+                            (
+                              select json_agg(
+                                json_build_object(
+                                  'id', aqqa.id,
+                                  'question_id', aqqa.question_id,
+                                  'attachment_type', aqqa.attachment_type,
+                                  'storage_bucket', aqqa.storage_bucket,
+                                  'storage_path', aqqa.storage_path,
+                                  'file_url', aqqa.file_url,
+                                  'file_name', aqqa.file_name,
+                                  'mime_type', aqqa.mime_type,
+                                  'file_size_bytes', aqqa.file_size_bytes,
+                                  'duration_sec', aqqa.duration_sec,
+                                  'width_px', aqqa.width_px,
+                                  'height_px', aqqa.height_px,
+                                  'order_index', aqqa.order_index
+                                )
+                                order by aqqa.attachment_type, aqqa.order_index
+                              )
+                              from assignment_quiz_question_attachments aqqa
+                              where aqqa.question_id = aqq.id
+                            ),
+                            '[]'::json
+                          )
+                        )
+                        order by aqq.order_index
+                      )
+                      from assignment_quiz_questions aqq
+                      where aqq.assignment_part_id = ap.id
+                    ),
+                    '[]'::json
                   )
                 )
                 order by ap.order_index
@@ -608,6 +769,28 @@ export const studentAssignmentRepository = {
                       )
                       from submission_item_attachments sia
                       where sia.submission_item_id = spi.id
+                    ),
+                    '[]'::json
+                  ),
+                  'quiz_answers', coalesce(
+                    (
+                      select json_agg(
+                        json_build_object(
+                          'id', sqa.id,
+                          'submission_id', sqa.submission_id,
+                          'submission_item_id', sqa.submission_item_id,
+                          'assignment_part_id', sqa.assignment_part_id,
+                          'question_id', sqa.question_id,
+                          'selected_choice_id', sqa.selected_choice_id,
+                          'answer_text', sqa.answer_text,
+                          'is_correct', sqa.is_correct,
+                          'answered_at', sqa.answered_at
+                        )
+                        order by aqq.order_index
+                      )
+                      from submission_quiz_answers sqa
+                      join assignment_quiz_questions aqq on aqq.id = sqa.question_id
+                      where sqa.submission_item_id = spi.id
                     ),
                     '[]'::json
                   )

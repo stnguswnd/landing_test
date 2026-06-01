@@ -60,6 +60,27 @@ type TeacherAssignmentPreview = {
       fileName: string;
       orderIndex: number;
     }>;
+    quizQuestions?: Array<{
+      id: string;
+      questionText: string;
+      explanation?: string;
+      orderIndex: number;
+      choices: Array<{
+        id: string;
+        choiceLabel?: string;
+        choiceText: string;
+        isCorrect: boolean;
+        incorrectReason?: string;
+        orderIndex: number;
+      }>;
+      attachments?: Array<{
+        id: string;
+        attachmentType: "image" | "audio" | "video" | "file";
+        fileUrl?: string;
+        fileName?: string;
+        orderIndex: number;
+      }>;
+    }>;
   }>;
 };
 
@@ -144,6 +165,7 @@ function partTypeLabel(type: string) {
   if (type === "listening") return "리스닝";
   if (type === "writing") return "라이팅";
   if (type === "photo_submission") return "사진 제출";
+  if (type === "quiz") return "퀴즈";
   if (type === "vocabulary_example") return "단어장 예문";
   if (type === "vocabulary_recording") return "단어장 녹음";
   return assignmentTypeLabel(type);
@@ -325,7 +347,136 @@ function PartPreviewCard({
           <Button type="button">저장하기</Button>
         </div>
       )}
+
+      {part.partType === "quiz" && (
+        <QuizPartPreview part={part} />
+      )}
     </Card>
+  );
+}
+
+function QuizPartPreview({ part }: { part: NonNullable<TeacherAssignmentPreview["parts"]>[number] }) {
+  const questions = [...(part.quizQuestions ?? [])].sort((a, b) => a.orderIndex - b.orderIndex);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [selectedByQuestion, setSelectedByQuestion] = useState<Record<string, string>>({});
+  const currentQuestion = questions[currentIndex];
+  const selectedChoiceId = currentQuestion ? selectedByQuestion[currentQuestion.id] : "";
+  const selectedChoice = currentQuestion?.choices.find((choice) => choice.id === selectedChoiceId);
+  const canContinue = Boolean(selectedChoice?.isCorrect);
+
+  if (questions.length === 0) {
+    return (
+      <div className="mt-4 rounded-lg border border-dashed border-line p-4">
+        <p className="text-sm font-semibold text-slate-500">퀴즈 문제가 없습니다.</p>
+      </div>
+    );
+  }
+
+  const images = (currentQuestion.attachments ?? []).filter((attachment) => attachment.attachmentType === "image" && attachment.fileUrl);
+  const audios = (currentQuestion.attachments ?? []).filter((attachment) => attachment.attachmentType === "audio" && attachment.fileUrl);
+
+  return (
+    <div className="mt-4 grid gap-4">
+      {part.instruction && (
+        <div className="rounded-lg border border-line p-4">
+          <p className="whitespace-pre-wrap leading-7 text-slate-700">{part.instruction}</p>
+        </div>
+      )}
+
+      <Card className="border border-line shadow-none">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap gap-2">
+            <Badge tone="blue">Q{currentIndex + 1}</Badge>
+            <Badge tone="green">{currentIndex + 1} / {questions.length}</Badge>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {questions.map((question, index) => (
+              <button
+                key={question.id}
+                type="button"
+                onClick={() => setCurrentIndex(index)}
+                className={`rounded-full border px-3 py-1 text-xs font-extrabold ${
+                  index === currentIndex ? "border-action bg-action text-white" : "border-line bg-white text-slate-600"
+                }`}
+              >
+                Q{index + 1}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <h3 className="mt-4 text-xl font-extrabold leading-8">{currentQuestion.questionText}</h3>
+
+        {(images.length > 0 || audios.length > 0) && (
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <div className="grid gap-3">
+              <p className="text-sm font-bold text-slate-600">문제 이미지</p>
+              {images.length > 0 ? images.map((image) => (
+                <a key={image.id} href={image.fileUrl} target="_blank" rel="noreferrer" className="overflow-hidden rounded-lg border border-line bg-slate-50">
+                  <img src={image.fileUrl} alt={image.fileName || "퀴즈 이미지"} className="max-h-[320px] w-full object-contain" />
+                </a>
+              )) : <p className="rounded-md border border-dashed border-line p-3 text-sm text-slate-500">이미지 없음</p>}
+            </div>
+            <div className="grid gap-3">
+              <p className="text-sm font-bold text-slate-600">문제 오디오</p>
+              {audios.length > 0 ? audios.map((audio) => (
+                <div key={audio.id} className="rounded-lg border border-line bg-blue-50 p-3">
+                  <p className="mb-2 text-sm font-semibold text-action">{audio.fileName || "오디오 파일"}</p>
+                  {audio.fileUrl && <AudioPlayer src={audio.fileUrl} preload="metadata" />}
+                </div>
+              )) : <p className="rounded-md border border-dashed border-line p-3 text-sm text-slate-500">오디오 없음</p>}
+            </div>
+          </div>
+        )}
+
+        <div className="mt-6 grid gap-3">
+          {[...currentQuestion.choices].sort((a, b) => a.orderIndex - b.orderIndex).map((choice) => {
+            const isSelected = selectedChoiceId === choice.id;
+            const showResult = Boolean(selectedChoiceId);
+            const tone = showResult && isSelected && choice.isCorrect
+              ? "border-green-500 bg-green-50 text-green-800"
+              : showResult && isSelected
+                ? "border-red-400 bg-red-50 text-red-800"
+                : isSelected
+                  ? "border-action bg-blue-50 text-action"
+                  : "border-line bg-white text-slate-800";
+            return (
+              <button
+                key={choice.id}
+                type="button"
+                disabled={false}
+                onClick={() => setSelectedByQuestion((current) => ({ ...current, [currentQuestion.id]: choice.id }))}
+                className={`min-h-14 rounded-lg border-2 px-4 py-3 text-left text-lg font-extrabold ${tone}`}
+              >
+                {choice.choiceLabel}. {choice.choiceText}
+              </button>
+            );
+          })}
+        </div>
+
+        {selectedChoice && (
+          <div className={`mt-5 rounded-lg border p-4 ${selectedChoice.isCorrect ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}>
+            <p className={`text-lg font-extrabold ${selectedChoice.isCorrect ? "text-green-700" : "text-red-700"}`}>
+              {selectedChoice.isCorrect ? "정답이에요!" : "오답"}
+            </p>
+            {selectedChoice.isCorrect ? (
+              <p className="mt-2 font-semibold text-green-700">{currentQuestion.explanation || "잘했어요."}</p>
+            ) : (
+              <>
+                {selectedChoice.incorrectReason && <p className="mt-2 font-semibold text-red-700">{selectedChoice.incorrectReason}</p>}
+              </>
+            )}
+          </div>
+        )}
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <Button type="button" variant="secondary" disabled={currentIndex === 0} onClick={() => setCurrentIndex((value) => Math.max(0, value - 1))}>이전 문제</Button>
+          <Button type="button" disabled={!canContinue || currentIndex === questions.length - 1} onClick={() => setCurrentIndex((value) => Math.min(questions.length - 1, value + 1))}>
+            {!selectedChoiceId ? "답을 선택해주세요" : !canContinue ? "다시 골라보세요" : currentIndex === questions.length - 1 ? "마지막 문제" : "다음 문제"}
+          </Button>
+        </div>
+      </Card>
+    </div>
   );
 }
 

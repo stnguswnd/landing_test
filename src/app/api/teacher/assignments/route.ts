@@ -78,6 +78,60 @@ type AssignmentPartRow = {
   archived_reason: string | null;
   attachments: AssignmentPartAttachmentRow[] | null;
   vocabulary_items: AssignmentVocabularyItemRow[] | null;
+  quiz_questions: QuizQuestionRow[] | null;
+};
+
+type QuizQuestionRow = {
+  id: string;
+  assignment_part_id: string;
+  question_text: string;
+  explanation: string | null;
+  order_index: number;
+  choices: QuizChoiceRow[] | null;
+  attachments: QuizQuestionAttachmentRow[] | null;
+};
+
+type QuizChoiceRow = {
+  id: string;
+  question_id: string;
+  choice_label: string | null;
+  choice_text: string;
+  is_correct: boolean;
+  incorrect_reason: string | null;
+  order_index: number;
+};
+
+type QuizQuestionAttachmentRow = {
+  id: string;
+  question_id: string;
+  attachment_type: "image" | "audio" | "video" | "file";
+  storage_bucket: string;
+  storage_path: string;
+  file_url: string | null;
+  file_name: string | null;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  duration_sec: number | null;
+  width_px: number | null;
+  height_px: number | null;
+  order_index: number;
+};
+
+type QuizQuestionInput = {
+  id?: string;
+  questionText: string;
+  explanation?: string | null;
+  orderIndex: number;
+  choices: QuizChoiceInput[];
+};
+
+type QuizChoiceInput = {
+  id?: string;
+  choiceLabel: string;
+  choiceText: string;
+  isCorrect: boolean;
+  incorrectReason?: string | null;
+  orderIndex: number;
 };
 
 type AssignmentVocabularyItemRow = {
@@ -116,6 +170,7 @@ type AssignmentPartInput = {
   writingHint?: string | null;
   writingExample?: string | null;
   vocabularyRows?: Array<{ word: string; meaning: string; orderIndex: number }>;
+  quizQuestions?: QuizQuestionInput[];
   isRequired: boolean;
   allowSubmission: boolean;
   minSubmissionCount: number;
@@ -129,6 +184,7 @@ type SyncedAssignmentPart = {
 };
 
 type PartFilesByIndex = Map<number, { imageFiles: File[]; audioFiles: File[] }>;
+type QuizQuestionFilesByKey = Map<string, { imageFiles: File[]; audioFiles: File[] }>;
 
 type AssignmentTargetInput = {
   classId: string;
@@ -226,6 +282,27 @@ function storageErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
+function databaseErrorPayload(error: unknown) {
+  const pgError = error as {
+    message?: unknown;
+    code?: unknown;
+    detail?: unknown;
+    hint?: unknown;
+    constraint?: unknown;
+    table?: unknown;
+    column?: unknown;
+  };
+  return {
+    error: `과제 저장 중 오류가 발생했습니다: ${storageErrorMessage(error)}`,
+    code: typeof pgError.code === "string" ? pgError.code : undefined,
+    detail: typeof pgError.detail === "string" ? pgError.detail : undefined,
+    hint: typeof pgError.hint === "string" ? pgError.hint : undefined,
+    constraint: typeof pgError.constraint === "string" ? pgError.constraint : undefined,
+    table: typeof pgError.table === "string" ? pgError.table : undefined,
+    column: typeof pgError.column === "string" ? pgError.column : undefined,
+  };
+}
+
 function isMissingBucketError(error: { status?: number; message?: string } | null) {
   return error?.status === 404 || /bucket.*not found|not found|does not exist/i.test(error?.message ?? "");
 }
@@ -304,6 +381,44 @@ async function mapPartAttachment(attachment: AssignmentPartAttachmentRow) {
   };
 }
 
+async function mapQuizQuestionAttachment(attachment: QuizQuestionAttachmentRow) {
+  return {
+    id: attachment.id,
+    questionId: attachment.question_id,
+    attachmentType: attachment.attachment_type,
+    storageBucket: attachment.storage_bucket,
+    storagePath: attachment.storage_path,
+    fileUrl: (await signedUrl(attachment.storage_bucket, attachment.storage_path)) || attachment.file_url || "",
+    fileName: attachment.file_name ?? "",
+    mimeType: attachment.mime_type ?? "",
+    fileSizeBytes: attachment.file_size_bytes ?? undefined,
+    durationSec: attachment.duration_sec ?? undefined,
+    widthPx: attachment.width_px ?? undefined,
+    heightPx: attachment.height_px ?? undefined,
+    orderIndex: attachment.order_index,
+  };
+}
+
+async function mapQuizQuestion(question: QuizQuestionRow) {
+  return {
+    id: question.id,
+    assignmentPartId: question.assignment_part_id,
+    questionText: question.question_text,
+    explanation: question.explanation ?? "",
+    orderIndex: question.order_index,
+    choices: (question.choices ?? []).map((choice) => ({
+      id: choice.id,
+      questionId: choice.question_id,
+      choiceLabel: choice.choice_label ?? "",
+      choiceText: choice.choice_text,
+      isCorrect: choice.is_correct,
+      incorrectReason: choice.incorrect_reason ?? "",
+      orderIndex: choice.order_index,
+    })),
+    attachments: await Promise.all((question.attachments ?? []).map(mapQuizQuestionAttachment)),
+  };
+}
+
 async function mapAssignment(row: AssignmentRow) {
   const activeParts = (row.parts ?? []).filter((part) => part.status !== "archived");
   return {
@@ -370,6 +485,7 @@ async function mapAssignment(row: AssignmentRow) {
       archivedAt: part.archived_at ?? undefined,
       archivedReason: part.archived_reason ?? undefined,
       attachments: await Promise.all((part.attachments ?? []).map(mapPartAttachment)),
+      quizQuestions: await Promise.all((part.quiz_questions ?? []).map(mapQuizQuestion)),
     }))),
     updatedAt: row.updated_at.toISOString(),
   };
@@ -483,6 +599,67 @@ async function getAssignmentRow(id: string, teacherId: string) {
                     )
                     from assignment_vocabulary_items avi
                     where avi.assignment_part_id = ap.id
+                  ),
+                  '[]'::json
+                ),
+                'quiz_questions', coalesce(
+                  (
+                    select json_agg(
+                      json_build_object(
+                        'id', aqq.id,
+                        'assignment_part_id', aqq.assignment_part_id,
+                        'question_text', aqq.question_text,
+                        'explanation', aqq.explanation,
+                        'order_index', aqq.order_index,
+                        'choices', coalesce(
+                          (
+                            select json_agg(
+                              json_build_object(
+                                'id', aqc.id,
+                                'question_id', aqc.question_id,
+                                'choice_label', aqc.choice_label,
+                                'choice_text', aqc.choice_text,
+                                'is_correct', aqc.is_correct,
+                                'incorrect_reason', aqc.incorrect_reason,
+                                'order_index', aqc.order_index
+                              )
+                              order by aqc.order_index
+                            )
+                            from assignment_quiz_choices aqc
+                            where aqc.question_id = aqq.id
+                          ),
+                          '[]'::json
+                        ),
+                        'attachments', coalesce(
+                          (
+                            select json_agg(
+                              json_build_object(
+                                'id', aqqa.id,
+                                'question_id', aqqa.question_id,
+                                'attachment_type', aqqa.attachment_type,
+                                'storage_bucket', aqqa.storage_bucket,
+                                'storage_path', aqqa.storage_path,
+                                'file_url', aqqa.file_url,
+                                'file_name', aqqa.file_name,
+                                'mime_type', aqqa.mime_type,
+                                'file_size_bytes', aqqa.file_size_bytes,
+                                'duration_sec', aqqa.duration_sec,
+                                'width_px', aqqa.width_px,
+                                'height_px', aqqa.height_px,
+                                'order_index', aqqa.order_index
+                              )
+                              order by aqqa.attachment_type, aqqa.order_index
+                            )
+                            from assignment_quiz_question_attachments aqqa
+                            where aqqa.question_id = aqq.id
+                          ),
+                          '[]'::json
+                        )
+                      )
+                      order by aqq.order_index
+                    )
+                    from assignment_quiz_questions aqq
+                    where aqq.assignment_part_id = ap.id
                   ),
                   '[]'::json
                 )
@@ -646,6 +823,7 @@ export async function POST(request: Request) {
   const imageFile = formData.get("imageFile");
   const audioFile = formData.get("audioFile");
   const partFiles = parsePartFiles(formData);
+  const quizQuestionFiles = parseQuizQuestionFiles(formData);
   const targetAssignments = parseTargetAssignments(formData.get("assignments"));
 
   if (!title) {
@@ -655,6 +833,20 @@ export async function POST(request: Request) {
   const hasPartVocabularyRows = parts.some((part) => (part.vocabularyRows ?? []).length > 0);
   if (hasVocabularyPart && !hasPartVocabularyRows && vocabularyItems.length === 0) {
       return NextResponse.json({ error: "단어를 1개 이상 입력해주세요." }, { status: 400 });
+  }
+  for (const [partIndex, part] of parts.entries()) {
+    if (part.partType !== "quiz") continue;
+    if (!part.quizQuestions || part.quizQuestions.length === 0) {
+      return NextResponse.json({ error: `Part ${partIndex + 1}: 퀴즈 문제를 1개 이상 추가해주세요.` }, { status: 400 });
+    }
+    for (const [questionIndex, question] of part.quizQuestions.entries()) {
+      if (question.choices.length < 2) {
+        return NextResponse.json({ error: `Part ${partIndex + 1} Q${questionIndex + 1}: 선택지를 2개 이상 추가해주세요.` }, { status: 400 });
+      }
+      if (question.choices.filter((choice) => choice.isCorrect).length !== 1) {
+        return NextResponse.json({ error: `Part ${partIndex + 1} Q${questionIndex + 1}: 정답 선택지를 정확히 1개 선택해주세요.` }, { status: 400 });
+      }
+    }
   }
 
   const existingUploadResult = await query<{
@@ -877,6 +1069,7 @@ export async function POST(request: Request) {
     const syncedParts = await syncAssignmentParts(client, id, parts);
     await syncAssignmentPartVocabularyItems(client, id, syncedParts, parts, vocabularyItems);
     await syncAssignmentPartFiles(client, supabase, id, syncedParts, partFiles);
+    await syncQuizQuestions(client, supabase, id, syncedParts, parts, quizQuestionFiles);
 
     for (const targetAssignment of targetAssignments) {
       const dueAt = toDueAt(targetAssignment.dueDate, targetAssignment.dueTime);
@@ -915,7 +1108,7 @@ export async function POST(request: Request) {
   } catch (error) {
     await client.query("rollback");
     console.error(error);
-    return NextResponse.json({ error: "과제 저장 중 오류가 발생했습니다." }, { status: 500 });
+    return NextResponse.json(databaseErrorPayload(error), { status: 500 });
   } finally {
     client.release();
   }
@@ -1060,12 +1253,58 @@ function parseVocabularyItems(value: FormDataEntryValue | null) {
   }
 }
 
+function parseQuizQuestions(value: unknown): QuizQuestionInput[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((question, questionIndex) => {
+      const item = question as {
+        id?: unknown;
+        questionText?: unknown;
+        explanation?: unknown;
+        choices?: unknown;
+      };
+      const choices = Array.isArray(item.choices)
+        ? item.choices
+            .map((choice, choiceIndex) => {
+              const choiceItem = choice as {
+                id?: unknown;
+                choiceLabel?: unknown;
+                choiceText?: unknown;
+                isCorrect?: unknown;
+                incorrectReason?: unknown;
+              };
+              return {
+                id: typeof choiceItem.id === "string" && choiceItem.id.startsWith("quiz-choice-") ? choiceItem.id : undefined,
+                choiceLabel: String(choiceItem.choiceLabel ?? "").trim() || String(choiceIndex + 1),
+                choiceText: String(choiceItem.choiceText ?? "").trim(),
+                isCorrect: choiceItem.isCorrect === true,
+                incorrectReason: String(choiceItem.incorrectReason ?? "").trim() || null,
+                orderIndex: choiceIndex,
+              };
+            })
+            .filter((choice) => choice.choiceText)
+            .slice(0, 6)
+        : [];
+
+      return {
+        id: typeof item.id === "string" && item.id.startsWith("quiz-question-") ? item.id : undefined,
+        questionText: String(item.questionText ?? "").trim(),
+        explanation: String(item.explanation ?? "").trim() || null,
+        orderIndex: questionIndex,
+        choices,
+      };
+    })
+    .filter((question) => question.questionText)
+    .slice(0, 100);
+}
+
 function partTypeForAssignmentType(type: string) {
   if (type === "listening") return "listening";
   if (type === "writing") return "writing";
   if (type === "photo_submission") return "photo_submission";
   if (type === "vocabulary_example") return "vocabulary_example";
   if (type === "vocabulary_recording") return "vocabulary_recording";
+  if (type === "quiz") return "quiz";
   return "recording";
 }
 
@@ -1082,6 +1321,7 @@ function isAssignmentPartType(value: string) {
     "photo_submission",
     "vocabulary_example",
     "vocabulary_recording",
+    "quiz",
   ].includes(value);
 }
 
@@ -1137,6 +1377,7 @@ function parseAssignmentParts(
                 .filter((item) => item.word && item.meaning)
                 .slice(0, 200)
             : [],
+          quizQuestions: partType === "quiz" ? parseQuizQuestions((part as { quizQuestions?: unknown }).quizQuestions) : [],
           isRequired: part.isRequired !== false,
           allowSubmission: typeof part.allowSubmission === "boolean" ? part.allowSubmission : allowsSubmission(partType),
           minSubmissionCount: Number.isFinite(Number(part.minSubmissionCount)) ? Math.max(0, Number(part.minSubmissionCount)) : (allowsSubmission(partType) ? 1 : 0),
@@ -1165,6 +1406,24 @@ function parsePartFiles(formData: FormData): PartFilesByIndex {
     filesByIndex.set(index, current);
   }
   return filesByIndex;
+}
+
+function parseQuizQuestionFiles(formData: FormData): QuizQuestionFilesByKey {
+  const filesByKey: QuizQuestionFilesByKey = new Map();
+  for (const [key, value] of formData.entries()) {
+    if (!(value instanceof File) || value.size === 0) continue;
+    const match = key.match(/^quizQuestion(Image|Audio)Files\[(\d+)\]\[(\d+)\]$/);
+    if (!match) continue;
+    const partIndex = Number(match[2]);
+    const questionIndex = Number(match[3]);
+    if (!Number.isInteger(partIndex) || !Number.isInteger(questionIndex) || partIndex < 0 || questionIndex < 0) continue;
+    const mapKey = `${partIndex}:${questionIndex}`;
+    const current = filesByKey.get(mapKey) ?? { imageFiles: [], audioFiles: [] };
+    if (match[1] === "Image") current.imageFiles.push(value);
+    if (match[1] === "Audio") current.audioFiles.push(value);
+    filesByKey.set(mapKey, current);
+  }
+  return filesByKey;
 }
 
 async function syncAssignmentParts(client: PoolClient, assignmentId: string, parts: AssignmentPartInput[]): Promise<SyncedAssignmentPart[]> {
@@ -1279,6 +1538,189 @@ async function syncAssignmentPartFiles(
     if (files.audioFiles.length > 0) {
       await replacePartAttachments(client, supabase, assignmentId, part.id, "audio", files.audioFiles);
     }
+  }
+}
+
+async function syncQuizQuestions(
+  client: PoolClient,
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  assignmentId: string,
+  syncedParts: SyncedAssignmentPart[],
+  parts: AssignmentPartInput[],
+  filesByKey: QuizQuestionFilesByKey,
+) {
+  for (const syncedPart of syncedParts) {
+    const part = parts[syncedPart.orderIndex];
+    if (!part || part.partType !== "quiz") {
+      await client.query(
+        "delete from assignment_quiz_questions where assignment_part_id = $1",
+        [syncedPart.id],
+      );
+      continue;
+    }
+
+    const existing = await client.query<{ id: string }>(
+      "select id from assignment_quiz_questions where assignment_part_id = $1",
+      [syncedPart.id],
+    );
+    const existingIds = new Set(existing.rows.map((row) => row.id));
+    const nextQuestionIds = new Set<string>();
+
+    for (const [questionIndex, question] of (part.quizQuestions ?? []).entries()) {
+      const questionId = question.id && existingIds.has(question.id) ? question.id : `quiz-question-${randomUUID()}`;
+      nextQuestionIds.add(questionId);
+      await client.query(
+        `
+          insert into assignment_quiz_questions (
+            id, assignment_part_id, question_text, explanation, order_index
+          )
+          values ($1, $2, $3, $4, $5)
+          on conflict (id)
+          do update set
+            question_text = excluded.question_text,
+            explanation = excluded.explanation,
+            order_index = excluded.order_index,
+            updated_at = now()
+        `,
+        [questionId, syncedPart.id, question.questionText, question.explanation || null, questionIndex],
+      );
+
+      const existingChoices = await client.query<{ id: string }>(
+        "select id from assignment_quiz_choices where question_id = $1",
+        [questionId],
+      );
+      const existingChoiceIds = new Set(existingChoices.rows.map((row) => row.id));
+      const nextChoiceIds = new Set<string>();
+      await client.query("update assignment_quiz_choices set is_correct = false where question_id = $1", [questionId]);
+      for (const [choiceIndex, choice] of question.choices.entries()) {
+        const choiceId = choice.id && existingChoiceIds.has(choice.id) ? choice.id : `quiz-choice-${randomUUID()}`;
+        nextChoiceIds.add(choiceId);
+        await client.query(
+          `
+            insert into assignment_quiz_choices (
+              id, question_id, choice_label, choice_text, is_correct, incorrect_reason, order_index
+            )
+            values ($1, $2, $3, $4, $5, $6, $7)
+            on conflict (id)
+            do update set
+              choice_label = excluded.choice_label,
+              choice_text = excluded.choice_text,
+              is_correct = excluded.is_correct,
+              incorrect_reason = excluded.incorrect_reason,
+              order_index = excluded.order_index,
+              updated_at = now()
+          `,
+          [
+            choiceId,
+            questionId,
+            choice.choiceLabel || String(choiceIndex + 1),
+            choice.choiceText,
+            choice.isCorrect,
+            choice.incorrectReason || null,
+            choiceIndex,
+          ],
+        );
+      }
+      for (const choiceId of existingChoiceIds) {
+        if (!nextChoiceIds.has(choiceId)) {
+          await client.query("delete from assignment_quiz_choices where id = $1", [choiceId]);
+        }
+      }
+
+      const files = filesByKey.get(`${syncedPart.orderIndex}:${questionIndex}`);
+      if (files?.imageFiles.length) {
+        await replaceQuizQuestionAttachments(client, supabase, assignmentId, questionId, "image", files.imageFiles);
+      }
+      if (files?.audioFiles.length) {
+        await replaceQuizQuestionAttachments(client, supabase, assignmentId, questionId, "audio", files.audioFiles);
+      }
+    }
+
+    for (const questionId of existingIds) {
+      if (!nextQuestionIds.has(questionId)) {
+        await client.query("delete from assignment_quiz_questions where id = $1", [questionId]);
+      }
+    }
+  }
+}
+
+async function replaceQuizQuestionAttachments(
+  client: PoolClient,
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  assignmentId: string,
+  questionId: string,
+  attachmentType: "image" | "audio",
+  files: File[],
+) {
+  const bucket = attachmentType === "image" ? storageBuckets.images : storageBuckets.audio;
+  const maxFileSize = attachmentType === "image" ? MAX_IMAGE_FILE_SIZE : MAX_AUDIO_FILE_SIZE;
+  const isValidFile = attachmentType === "image" ? isImageFile : isAudioFile;
+
+  for (const file of files) {
+    if (!isValidFile(file)) {
+      throw new Error(attachmentType === "image"
+        ? `퀴즈 문제 이미지 파일 형식을 확인해주세요.\n${fileDebugInfo(file)}\n업로드 가능한 이미지 형식: ${SUPPORTED_IMAGE_EXTENSIONS}`
+        : `퀴즈 문제 오디오 파일 형식을 확인해주세요.\n${fileDebugInfo(file)}\n업로드 가능한 오디오 형식: ${SUPPORTED_AUDIO_EXTENSIONS}`);
+    }
+    if (file.size > maxFileSize) {
+      throw new Error(attachmentType === "image"
+        ? `퀴즈 문제 이미지 파일 용량이 너무 큽니다.\n${fileDebugInfo(file)}\n이미지는 1개당 최대 50MB까지 업로드할 수 있습니다.`
+        : `퀴즈 문제 오디오 파일 용량이 너무 큽니다.\n${fileDebugInfo(file)}\n오디오는 1개당 최대 50MB까지 업로드할 수 있습니다.`);
+    }
+  }
+
+  await ensureStorageBucket(supabase, bucket, {
+    fileSizeLimit: maxFileSize,
+    allowedMimeTypes: attachmentType === "image" ? ["image/*"] : ["audio/*", "application/octet-stream"],
+  });
+
+  const existing = await client.query<{ storage_path: string }>(
+    "select storage_path from assignment_quiz_question_attachments where question_id = $1 and attachment_type = $2",
+    [questionId, attachmentType],
+  );
+  if (existing.rows.length > 0) {
+    const { error } = await supabase.storage.from(bucket).remove(existing.rows.map((row) => row.storage_path));
+    if (error) console.error(error);
+  }
+  await client.query(
+    "delete from assignment_quiz_question_attachments where question_id = $1 and attachment_type = $2",
+    [questionId, attachmentType],
+  );
+
+  for (const [index, file] of files.entries()) {
+    const fileName = safeFileName(file.name);
+    const storagePath = `assignments/${assignmentId}/quiz/${questionId}/${attachmentType}/${index + 1}-${Date.now()}-${fileName}`;
+    const upload = await supabase.storage.from(bucket).upload(
+      storagePath,
+      Buffer.from(await file.arrayBuffer()),
+      { contentType: attachmentType === "image" ? imageContentType(file) : audioContentType(file), upsert: true },
+    );
+    if (upload.error) {
+      throw new Error(`${attachmentType === "image" ? "퀴즈 문제 이미지" : "퀴즈 문제 오디오"} 업로드 실패: ${upload.error.message}`);
+    }
+
+    const publicUrl = supabase.storage.from(bucket).getPublicUrl(storagePath).data.publicUrl;
+    await client.query(
+      `
+        insert into assignment_quiz_question_attachments (
+          id, question_id, attachment_type, storage_bucket, storage_path,
+          file_url, file_name, mime_type, file_size_bytes, order_index
+        )
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `,
+      [
+        `quiz-question-attachment-${randomUUID()}`,
+        questionId,
+        attachmentType,
+        bucket,
+        storagePath,
+        publicUrl,
+        fileName,
+        file.type || (attachmentType === "image" ? "image/png" : "audio/mpeg"),
+        file.size,
+        index,
+      ],
+    );
   }
 }
 
