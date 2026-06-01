@@ -85,6 +85,14 @@ function subjectLabel(subject: string) {
 
 function sortRows(rows: AssignmentRow[], sort: string) {
   const nextRows = [...rows];
+  if (sort === "title") {
+    const collator = new Intl.Collator("ko-KR", { numeric: true, sensitivity: "base" });
+    return nextRows.sort((a, b) => collator.compare(a.title, b.title));
+  }
+  if (sort === "title-desc") {
+    const collator = new Intl.Collator("ko-KR", { numeric: true, sensitivity: "base" });
+    return nextRows.sort((a, b) => collator.compare(b.title, a.title));
+  }
   if (sort === "oldest") {
     return nextRows.sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime());
   }
@@ -106,7 +114,7 @@ export default function AssignmentsPage() {
   const [query, setQuery] = useState("");
   const [subjectFilter, setSubjectFilter] = useState("all");
   const [classFilter, setClassFilter] = useState("all");
-  const [sort, setSort] = useState("latest");
+  const [sort, setSort] = useState("title");
   const [rows, setRows] = useState<AssignmentRow[]>([]);
   const [classes, setClasses] = useState<AssignmentClass[]>([]);
   const [bulkCancelClasses, setBulkCancelClasses] = useState<AssignmentClass[]>([]);
@@ -311,6 +319,8 @@ export default function AssignmentsPage() {
             정렬
             <Select value={sort} onChange={(event) => setSort(event.target.value)}>
               <option value="latest">최신순</option>
+              <option value="title">글자순</option>
+              <option value="title-desc">글자 역순</option>
               <option value="oldest">오래된순</option>
               <option value="due">마감 빠른순</option>
             </Select>
