@@ -45,7 +45,9 @@ type AssignmentClass = {
   name: string;
   status?: "active" | "archived";
   studentCount: number;
-  students: Array<{ id: string; name: string }>;
+  assignedTargetCount?: number;
+  submittedCount?: number;
+  students: Array<{ id: string; name: string; assignedTargetCount?: number; submittedCount?: number }>;
   subjects: Array<{ id: string; name: string; description?: string | null }>;
 };
 
@@ -55,6 +57,13 @@ type TargetSelection = {
   dueDate: string;
   dueTime: string;
   visibility: "published" | "draft";
+  targetType: "all" | "partial";
+  studentIds: string[];
+  studentSearch: string;
+};
+
+type CancelTargetSelection = {
+  classId: string;
   targetType: "all" | "partial";
   studentIds: string[];
   studentSearch: string;
@@ -100,11 +109,15 @@ export default function AssignmentsPage() {
   const [sort, setSort] = useState("latest");
   const [rows, setRows] = useState<AssignmentRow[]>([]);
   const [classes, setClasses] = useState<AssignmentClass[]>([]);
+  const [bulkCancelClasses, setBulkCancelClasses] = useState<AssignmentClass[]>([]);
+  const [isBulkCancelTargetsLoading, setIsBulkCancelTargetsLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isBulkCancelOpen, setIsBulkCancelOpen] = useState(false);
   const [deletingId, setDeletingId] = useState("");
+  const [isBulkCancelling, startBulkCancel] = useTransition();
 
   async function loadAssignments() {
     setIsLoading(true);
@@ -166,6 +179,70 @@ export default function AssignmentsPage() {
     setIsModalOpen(true);
   }
 
+  async function openBulkCancelModal() {
+    if (selectedIds.length === 0) {
+      setMessage("배정 취소할 숙제를 먼저 선택해주세요.");
+      return;
+    }
+    setMessage("");
+    setBulkCancelClasses([]);
+    setIsBulkCancelOpen(true);
+    setIsBulkCancelTargetsLoading(true);
+    try {
+      const response = await fetch("/api/teacher/assignments/bulk-cancel/targets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assignmentIds: selectedIds }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setIsBulkCancelOpen(false);
+        setMessage(data.error ?? "배정 취소 대상을 불러오지 못했습니다.");
+        return;
+      }
+      setBulkCancelClasses(data.classes ?? []);
+    } catch {
+      setIsBulkCancelOpen(false);
+      setMessage("배정 취소 대상을 불러오지 못했습니다.");
+    } finally {
+      setIsBulkCancelTargetsLoading(false);
+    }
+  }
+
+  function bulkCancelAssignments(targets: CancelTargetSelection[]) {
+    if (selectedIds.length === 0 || targets.length === 0) return;
+    startBulkCancel(async () => {
+      const response = await fetch("/api/teacher/assignments/bulk-cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          assignmentIds: selectedIds,
+          targets: targets.map((target) => ({
+            classId: target.classId,
+            targetType: target.targetType,
+            studentIds: target.studentIds,
+          })),
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMessage(data.error ?? "선택한 숙제 배정 취소 중 오류가 발생했습니다.");
+        return;
+      }
+      const deletedTargets = Number(data.deletedTargetCount ?? 0);
+      const deletedSubmissions = Number(data.deletedSubmissionCount ?? 0);
+      const deletedFiles = Number(data.deletedStorageObjectCount ?? 0);
+      setIsBulkCancelOpen(false);
+      setSelectedIds([]);
+      setMessage(
+        `선택한 숙제 ${data.assignmentCount ?? selectedIds.length}개의 배정 ${deletedTargets}건을 취소했습니다.` +
+        (deletedSubmissions > 0 ? ` 제출 이력 ${deletedSubmissions}건도 삭제했습니다.` : "") +
+        (deletedFiles > 0 ? ` 첨부 파일 ${deletedFiles}개도 삭제했습니다.` : ""),
+      );
+      await loadAssignments();
+    });
+  }
+
   async function deleteUnassignedAssignment(row: AssignmentRow) {
     if (row.targetCount > 0) {
       setMessage("이미 반이나 학생에게 배정된 과제는 삭제할 수 없습니다.");
@@ -199,6 +276,7 @@ export default function AssignmentsPage() {
         </div>
         <div className="grid gap-2 sm:flex lg:self-center">
           <Button type="button" variant="secondary" onClick={openAssignModal}>선택한 숙제 일괄 배정</Button>
+          <Button type="button" variant="danger" onClick={openBulkCancelModal}>선택한 숙제 일괄 배정 취소</Button>
           <Button href="/teacher/assignments/new">숙제 만들기</Button>
         </div>
       </div>
@@ -335,7 +413,212 @@ export default function AssignmentsPage() {
           }}
         />
       )}
+      {isBulkCancelOpen && (
+        <BulkCancelModal
+          assignments={selectedAssignments}
+          classes={bulkCancelClasses}
+          onClose={() => setIsBulkCancelOpen(false)}
+          onConfirm={bulkCancelAssignments}
+          isPending={isBulkCancelling}
+          isLoading={isBulkCancelTargetsLoading}
+        />
+      )}
     </TeacherLayout>
+  );
+}
+
+function BulkCancelModal({
+  assignments,
+  classes,
+  onClose,
+  onConfirm,
+  isPending,
+  isLoading,
+}: {
+  assignments: AssignmentRow[];
+  classes: AssignmentClass[];
+  onClose: () => void;
+  onConfirm: (targets: CancelTargetSelection[]) => void;
+  isPending: boolean;
+  isLoading: boolean;
+}) {
+  const [targetMap, setTargetMap] = useState<Record<string, CancelTargetSelection>>({});
+  const [error, setError] = useState("");
+  const targets = Object.values(targetMap);
+  const targetCount = assignments.reduce((sum, assignment) => sum + assignment.targetCount, 0);
+  const submittedCount = assignments.reduce((sum, assignment) => sum + assignment.submittedCount, 0);
+
+  useEffect(() => {
+    setTargetMap({});
+    setError("");
+  }, [classes]);
+
+  function toggleClass(classItem: AssignmentClass) {
+    setTargetMap((current) => {
+      if (current[classItem.id]) {
+        const next = { ...current };
+        delete next[classItem.id];
+        return next;
+      }
+      return {
+        ...current,
+        [classItem.id]: {
+          classId: classItem.id,
+          targetType: "all",
+          studentIds: [],
+          studentSearch: "",
+        },
+      };
+    });
+  }
+
+  function updateTarget(classId: string, input: Partial<CancelTargetSelection>) {
+    setTargetMap((current) => {
+      const existing = current[classId];
+      if (!existing) return current;
+      return { ...current, [classId]: { ...existing, ...input } };
+    });
+  }
+
+  function toggleStudent(classId: string, studentId: string) {
+    const target = targetMap[classId];
+    if (!target) return;
+    updateTarget(classId, {
+      studentIds: target.studentIds.includes(studentId)
+        ? target.studentIds.filter((id) => id !== studentId)
+        : [...target.studentIds, studentId],
+    });
+  }
+
+  function confirm() {
+    if (assignments.length === 0) {
+      setError("배정 취소할 숙제를 먼저 선택해주세요.");
+      return;
+    }
+    if (targets.length === 0) {
+      setError("배정 취소할 반을 1개 이상 선택해주세요.");
+      return;
+    }
+    for (const target of targets) {
+      if (target.targetType === "partial" && target.studentIds.length === 0) {
+        setError("일부 학생만 취소할 때는 학생을 1명 이상 선택해주세요.");
+        return;
+      }
+    }
+    setError("");
+    onConfirm(targets);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/35 p-4" role="dialog" aria-modal="true">
+      <div className="max-h-[90vh] w-full max-w-5xl overflow-auto rounded-lg bg-white p-5 shadow-soft">
+        <h2 className="text-xl font-bold">선택한 숙제의 모든 배정을 취소하시겠습니까?</h2>
+        <p className="mt-3 leading-7 text-slate-600">
+          선택한 숙제를 반 또는 학생 기준으로 일괄 배정 취소합니다.
+          선택한 대상에 제출 이력이 있으면 제출 기록과 제출 첨부 파일도 함께 삭제됩니다.
+        </p>
+        {submittedCount > 0 && (
+          <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm font-semibold leading-6 text-red-700">
+            선택한 숙제 전체에는 배정 {targetCount}건, 제출 완료 {submittedCount}건이 있습니다. 실제 삭제는 아래에서 선택한 반/학생 대상에만 적용됩니다.
+          </p>
+        )}
+        <div className="mt-4 max-h-52 overflow-auto rounded-md border border-line bg-slate-50 p-3">
+          <ul className="grid gap-2 text-sm">
+            {assignments.map((assignment) => (
+              <li key={assignment.id} className="rounded-md bg-white px-3 py-2 font-semibold">
+                {assignment.title}
+              </li>
+            ))}
+          </ul>
+        </div>
+        {error && <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{error}</p>}
+        <section className="mt-4 grid gap-3">
+          <h3 className="font-bold">취소 대상 반 선택</h3>
+          {isLoading && (
+            <div className="rounded-md border border-line bg-slate-50 p-4 text-sm font-semibold text-slate-600">
+              취소 가능한 배정을 불러오는 중입니다.
+            </div>
+          )}
+          {!isLoading && classes.length === 0 && (
+            <div className="rounded-md border border-line bg-slate-50 p-4 text-sm font-semibold text-slate-600">
+              선택한 숙제에 취소할 배정이 없습니다.
+            </div>
+          )}
+          {!isLoading && classes.map((classItem) => {
+            const selected = targetMap[classItem.id];
+            const filteredStudents = classItem.students.filter((student) => student.name.includes(selected?.studentSearch ?? ""));
+            return (
+              <div key={classItem.id} className={cn("rounded-md border border-line bg-white p-4", selected && "border-action bg-red-50/30")}>
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <label className="flex items-start gap-3">
+                    <input type="checkbox" className="mt-1 size-4" checked={Boolean(selected)} onChange={() => toggleClass(classItem)} />
+                      <span>
+                        <span className="block font-bold">{classItem.name}</span>
+                      <span className="text-sm text-slate-500">
+                        배정 학생 {classItem.studentCount}명
+                        {classItem.assignedTargetCount ? ` · 배정 ${classItem.assignedTargetCount}건` : ""}
+                        {classItem.submittedCount ? ` · 제출 ${classItem.submittedCount}건` : ""}
+                      </span>
+                    </span>
+                  </label>
+                </div>
+
+                {selected && (
+                  <div className="mt-4 grid gap-3 border-t border-line pt-4">
+                    <fieldset className="grid gap-2">
+                      <legend className="text-sm font-semibold">대상 학생</legend>
+                      <div className="flex flex-wrap gap-4 text-sm font-semibold">
+                        <label className="flex items-center gap-2">
+                          <input type="radio" checked={selected.targetType === "all"} onChange={() => updateTarget(classItem.id, { targetType: "all", studentIds: [] })} />
+                          반 전체
+                        </label>
+                        <label className="flex items-center gap-2">
+                          <input type="radio" checked={selected.targetType === "partial"} onChange={() => updateTarget(classItem.id, { targetType: "partial" })} />
+                          일부 학생만
+                        </label>
+                      </div>
+                    </fieldset>
+
+                    {selected.targetType === "partial" && (
+                      <div className="grid gap-3 rounded-md bg-slate-50 p-3">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                          <label className="grid flex-1 gap-2 text-sm font-semibold">
+                            학생 검색
+                            <Input value={selected.studentSearch} onChange={(event) => updateTarget(classItem.id, { studentSearch: event.target.value })} placeholder="학생 이름 검색" />
+                          </label>
+                          <p className="text-sm font-semibold text-slate-600">선택 {selected.studentIds.length}명</p>
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                          {filteredStudents.map((student) => (
+                            <label key={student.id} className="flex items-center gap-2 rounded-md border border-line bg-white p-2 text-sm font-semibold">
+                              <input type="checkbox" checked={selected.studentIds.includes(student.id)} onChange={() => toggleStudent(classItem.id, student.id)} />
+                              <span>
+                                {student.name}
+                                {(student.assignedTargetCount || student.submittedCount) && (
+                                  <span className="ml-1 text-xs text-slate-500">
+                                    ({student.assignedTargetCount ?? 0}건{student.submittedCount ? `, 제출 ${student.submittedCount}건` : ""})
+                                  </span>
+                                )}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </section>
+        <div className="mt-5 grid gap-2 sm:grid-cols-2">
+          <Button type="button" variant="secondary" onClick={onClose} disabled={isPending}>닫기</Button>
+          <Button type="button" variant="danger" onClick={confirm} disabled={isPending || isLoading || classes.length === 0}>
+            {isPending ? "취소 중..." : "배정/제출 이력 삭제"}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
