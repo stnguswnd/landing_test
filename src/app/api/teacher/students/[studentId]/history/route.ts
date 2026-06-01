@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { postgresPool, query } from "@/lib/postgres";
+import { createSupabaseAdminClient } from "@/lib/supabase/server";
+import { storageBuckets } from "@/lib/supabase/storage";
 import { requireTeacherSession } from "@/server/teacher/session";
 
 export const runtime = "nodejs";
@@ -34,6 +36,91 @@ async function deleteIfTableExists(
   if (result.rows[0]?.exists) {
     await client.query(sql, values);
   }
+}
+
+async function tableExists(client: { query: typeof postgresPool.query }, tableName: string) {
+  const result = await client.query<{ exists: boolean }>("select to_regclass($1) is not null as exists", [`public.${tableName}`]);
+  return Boolean(result.rows[0]?.exists);
+}
+
+type StorageObjectRef = {
+  storage_bucket: string;
+  storage_path: string;
+};
+
+async function collectStorageObjects(client: { query: typeof postgresPool.query }, assignmentId: string, studentId: string, submissionId: string) {
+  const objects = new Map<string, StorageObjectRef>();
+  const add = (bucket: string | null | undefined, path: string | null | undefined) => {
+    if (!bucket || !path) return;
+    objects.set(`${bucket}:${path}`, { storage_bucket: bucket, storage_path: path });
+  };
+
+  if (await tableExists(client, "submission_item_attachments")) {
+    const result = await client.query<StorageObjectRef>(
+      `
+        select distinct storage_bucket, storage_path
+        from submission_item_attachments
+        where submission_id = $1
+          and storage_path is not null
+      `,
+      [submissionId],
+    );
+    result.rows.forEach((row) => add(row.storage_bucket, row.storage_path));
+  }
+
+  if (await tableExists(client, "submission_items")) {
+    const result = await client.query<{ recording_storage_path: string | null }>(
+      `
+        select distinct recording_storage_path
+        from submission_items
+        where submission_id = $1
+          and recording_storage_path is not null
+      `,
+      [submissionId],
+    );
+    result.rows.forEach((row) => add(storageBuckets.audio, row.recording_storage_path));
+  }
+
+  if (await tableExists(client, "student_assignment_draft_attachments")) {
+    const result = await client.query<StorageObjectRef>(
+      `
+        select distinct sada.storage_bucket, sada.storage_path
+        from student_assignment_draft_attachments sada
+        join student_assignment_drafts sad on sad.id = sada.draft_id
+        where sad.assignment_id = $1
+          and sad.student_id = $2
+          and sada.storage_path is not null
+      `,
+      [assignmentId, studentId],
+    );
+    result.rows.forEach((row) => add(row.storage_bucket, row.storage_path));
+  }
+
+  return Array.from(objects.values());
+}
+
+async function deleteStorageObjects(objects: StorageObjectRef[]) {
+  const supabase = createSupabaseAdminClient();
+  const objectsByBucket = new Map<string, string[]>();
+
+  for (const object of objects) {
+    const current = objectsByBucket.get(object.storage_bucket) ?? [];
+    current.push(object.storage_path);
+    objectsByBucket.set(object.storage_bucket, current);
+  }
+
+  let deletedCount = 0;
+  const errors: string[] = [];
+  for (const [bucket, paths] of objectsByBucket.entries()) {
+    const { error } = await supabase.storage.from(bucket).remove(paths);
+    if (error) {
+      errors.push(`${bucket}: ${error.message}`);
+      continue;
+    }
+    deletedCount += paths.length;
+  }
+
+  return { deletedCount, errors };
 }
 
 function toDate(value: string | Date) {
@@ -113,6 +200,7 @@ export async function DELETE(request: Request, { params }: Params) {
   if (!submissionId) return NextResponse.json({ error: "삭제할 제출 내역을 찾을 수 없습니다." }, { status: 400 });
 
   const client = await postgresPool.connect();
+  let storageObjects: StorageObjectRef[] = [];
   try {
     await client.query("begin");
 
@@ -145,11 +233,31 @@ export async function DELETE(request: Request, { params }: Params) {
     }
 
     if (row.submission_id) {
+      storageObjects = await collectStorageObjects(client, row.assignment_id, row.student_id, row.submission_id);
+      await deleteIfTableExists(client, "submission_quiz_answers", "delete from submission_quiz_answers where submission_id = $1", [row.submission_id]);
       await deleteIfTableExists(client, "submission_vocabulary_items", "delete from submission_vocabulary_items where submission_id = $1", [row.submission_id]);
       await deleteIfTableExists(client, "teacher_feedback", "delete from teacher_feedback where submission_id = $1", [row.submission_id]);
       await deleteIfTableExists(client, "submission_item_attachments", "delete from submission_item_attachments where submission_id = $1", [row.submission_id]);
       await deleteIfTableExists(client, "submission_items", "delete from submission_items where submission_id = $1", [row.submission_id]);
       await client.query("delete from submissions where id = $1", [row.submission_id]);
+      await deleteIfTableExists(
+        client,
+        "student_assignment_draft_attachments",
+        `
+          delete from student_assignment_draft_attachments sada
+          using student_assignment_drafts sad
+          where sad.assignment_id = $1
+            and sad.student_id = $2
+            and sada.draft_id = sad.id
+        `,
+        [row.assignment_id, row.student_id],
+      );
+      await deleteIfTableExists(
+        client,
+        "student_assignment_drafts",
+        "delete from student_assignment_drafts where assignment_id = $1 and student_id = $2",
+        [row.assignment_id, row.student_id],
+      );
     }
 
     await deleteIfTableExists(
@@ -172,7 +280,15 @@ export async function DELETE(request: Request, { params }: Params) {
     );
 
     await client.query("commit");
-    return NextResponse.json({ deleted: true });
+    const storageResult = await deleteStorageObjects(storageObjects);
+    if (storageResult.errors.length > 0) {
+      console.error("Storage deletion failed after student history delete", storageResult.errors);
+    }
+    return NextResponse.json({
+      deleted: true,
+      deletedStorageObjectCount: storageResult.deletedCount,
+      storageDeleteErrors: storageResult.errors,
+    });
   } catch (error) {
     await client.query("rollback");
     console.error(error);

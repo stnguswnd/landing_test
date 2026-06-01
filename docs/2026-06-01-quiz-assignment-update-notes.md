@@ -19,6 +19,11 @@
 - 단, 현재 선택한 답이 정답일 때만 다음 문제 또는 제출로 넘어갈 수 있습니다.
 - 오답을 눌렀을 때 즉시 정답을 노출하지 않습니다.
 - 제출 완료 후 결과 화면에서는 정답/오답과 정답, 오답 이유를 확인할 수 있습니다.
+- 문제 삭제 버튼을 누르면 바로 삭제하지 않고 확인 모달을 먼저 표시합니다.
+- Part 삭제 버튼을 누르면 바로 삭제하지 않고 확인 모달을 먼저 표시합니다.
+- 과제 첨부 파일 업로드 정책은 파일 1개당 10MB, 숙제 저장 요청 전체 100MB로 정리했습니다.
+- 배정 취소 정책은 해당 학생의 배정, 제출 이력, 제출 첨부 파일까지 삭제하는 hard delete 방식으로 변경했습니다.
+- 학생 관리의 제출 이력 삭제는 배정은 유지하고 제출 기록만 삭제하는 방식으로 정리했습니다.
 
 ## 변경 파일
 
@@ -47,6 +52,9 @@
 - `src/server/teacher/submissionDetail.ts`
 - `src/app/teacher/submissions/[submissionId]/SubmissionReviewPanel.tsx`
 - `src/features/student-management/types/studentManagement.ts`
+- `src/app/api/teacher/assignment-targets/cancel/route.ts`
+- `src/app/api/teacher/students/[studentId]/history/route.ts`
+- `next.config.ts`
 
 ## DB 변경
 
@@ -368,6 +376,64 @@ constraint: assignment_parts_part_type_check
 table: assignment_parts
 ```
 
+### 업로드 용량 정책
+
+파일 업로드 정책을 아래처럼 정리했습니다.
+
+```text
+파일 1개당 최대 용량: 10MB
+숙제 저장 요청 전체 최대 용량: 100MB
+```
+
+적용 위치:
+
+- `src/app/teacher/assignments/new/page.tsx`
+- `src/app/api/teacher/assignments/route.ts`
+- `next.config.ts`
+
+클라이언트 사전 검증:
+
+- 이미지 1개가 10MB를 넘으면 저장 전에 막습니다.
+- 오디오 1개가 10MB를 넘으면 저장 전에 막습니다.
+- 한 숙제 저장 요청에 포함된 첨부 파일 합계가 100MB를 넘으면 저장 전에 막습니다.
+
+서버 검증:
+
+- API에서도 이미지/오디오 파일 1개당 10MB 제한을 다시 검사합니다.
+- 클라이언트 검증을 우회해도 서버에서 막힙니다.
+
+Next proxy 설정:
+
+```ts
+experimental: {
+  proxyClientMaxBodySize: "100mb",
+}
+```
+
+이 설정을 추가한 이유:
+
+- 이 repo는 `src/proxy.ts`를 사용합니다.
+- proxy가 있는 경우 요청 body 크기 제한이 먼저 걸릴 수 있습니다.
+- 실제 저장 API에 도달하기 전에 `HTTP 413`이 날 수 있어서 proxy 요청 한도를 100MB로 올렸습니다.
+
+413 오류 표시도 개선했습니다.
+
+기존에는 아래처럼 원인이 모호했습니다.
+
+```text
+숙제를 저장하지 못했습니다
+HTTP 413
+```
+
+변경 후에는 아래처럼 안내합니다.
+
+```text
+첨부 파일 용량이 서버에서 허용하는 요청 크기를 초과했습니다.
+한 번에 저장 가능한 첨부 파일 합계는 약 100MB 이하로 맞춰주세요.
+이미지나 오디오를 압축하거나 파일 개수를 줄인 뒤 다시 저장해주세요.
+HTTP 413
+```
+
 ## 강사 과제 조회 API 변경
 
 파일:
@@ -463,6 +529,36 @@ Quiz Part에서 표시하는 항목:
 - 선택지 내용
 - 오답 이유
 - 선택지 삭제 버튼
+
+### 삭제 확인 모달
+
+강사 숙제 생성/수정 화면에서 실수로 삭제되는 것을 막기 위해 확인 모달을 추가했습니다.
+
+#### Part 삭제
+
+Part의 `삭제` 버튼을 누르면 바로 삭제하지 않고 아래 모달을 표시합니다.
+
+```text
+Part를 삭제하시겠습니까?
+```
+
+확인 시 화면에서 Part가 제거됩니다. 저장 전까지는 DB에 반영되지 않습니다.
+
+#### 퀴즈 문제 삭제
+
+Quiz Part 안의 `문제 삭제` 버튼도 바로 삭제하지 않고 아래 모달을 표시합니다.
+
+```text
+문제를 삭제하시겠습니까?
+```
+
+모달에는 어느 Part의 몇 번 문제를 삭제하는지 표시합니다.
+
+예:
+
+```text
+Phonics Quiz의 Q2 문제를 삭제합니다. 저장 전까지는 화면에서만 삭제된 상태입니다.
+```
 
 ### Quiz Part에서 숨긴 항목
 
@@ -679,6 +775,174 @@ Quiz Part 결과 표시를 추가했습니다.
 - 오답인 경우 정답
 - 오답 이유
 
+## 배정 취소 / 제출 이력 삭제 정책 변경
+
+이번 작업 중 삭제 정책을 아래처럼 정리했습니다.
+
+### 1. 배정 취소
+
+파일:
+
+```text
+src/app/api/teacher/assignment-targets/cancel/route.ts
+```
+
+배정 취소는 이제 `assignment_targets.status = 'cancelled'`로 남기지 않고 hard delete합니다.
+
+즉, 강사가 특정 학생의 배정을 취소하면 해당 학생에게 그 숙제가 배정되지 않았던 것처럼 정리됩니다.
+
+삭제 대상:
+
+- `assignment_targets`
+- `submissions`
+- `submission_items`
+- `submission_item_attachments`
+- `submission_vocabulary_items`
+- `submission_quiz_answers`
+- `teacher_feedback`
+- `student_ai_feedback_attempts`
+- `student_assignment_drafts`
+- `student_assignment_draft_attachments`
+
+Storage에서도 같이 삭제하는 파일:
+
+- 학생 제출 사진
+- 학생 제출 녹음 파일
+- 학생 임시저장 첨부 파일
+
+응답에는 기존 UI 호환을 위해 `cancelledCount`를 유지하고, 실제 삭제 개수도 함께 내려줍니다.
+
+```json
+{
+  "cancelledCount": 1,
+  "deletedTargetCount": 1,
+  "deletedSubmissionCount": 1,
+  "deletedStorageObjectCount": 2
+}
+```
+
+정책 의미:
+
+- 배정 취소는 “이 학생에게 이 숙제를 더 이상 배정하지 않음”입니다.
+- 제출 이력과 제출 파일도 함께 제거합니다.
+- 취소 이력을 DB에 남기지는 않습니다.
+
+### 2. 학생 관리의 제출 이력 삭제
+
+파일:
+
+```text
+src/app/api/teacher/students/[studentId]/history/route.ts
+```
+
+학생 관리에서 개별 제출 이력을 삭제하는 기능은 배정 취소와 다릅니다.
+
+정책:
+
+- 제출 기록만 삭제합니다.
+- 배정 자체는 유지합니다.
+- 학생에게는 해당 숙제가 다시 미제출 상태로 남습니다.
+
+삭제 대상:
+
+- `submissions`
+- `submission_items`
+- `submission_item_attachments`
+- `submission_vocabulary_items`
+- `submission_quiz_answers`
+- `teacher_feedback`
+- `student_ai_feedback_attempts`
+- `student_assignment_drafts`
+- `student_assignment_draft_attachments`
+
+Storage에서도 같이 삭제하는 파일:
+
+- 해당 제출의 사진
+- 해당 제출의 녹음 파일
+- 해당 숙제/학생의 임시저장 첨부 파일
+
+유지하는 것:
+
+- `assignment_targets`
+
+삭제 후 target 상태:
+
+```text
+assignment_targets.status = assigned
+assignment_targets.submitted_at = null
+assignment_targets.reviewed = false
+assignment_targets.feedback = null
+```
+
+정책 의미:
+
+- 제출만 지운 것이므로 숙제 배정은 그대로 남습니다.
+- 학생 관리 화면에서는 해당 과제가 제출 완료가 아니라 미제출/늦음 상태로 보일 수 있습니다.
+
+예:
+
+```text
+Jane - Alphabet Lesson 1-3 제출 이력 삭제
+```
+
+결과:
+
+- Jane의 `Alphabet Lesson 1-3` 제출 row는 삭제됩니다.
+- 관련 제출 상세와 파일도 삭제됩니다.
+- 하지만 Jane에게 배정된 `Alphabet Lesson 1-3` target은 남습니다.
+- 따라서 화면에는 이 숙제가 다시 미제출 상태로 보일 수 있습니다.
+
+### 3. 두 삭제 기능의 차이
+
+```text
+배정 취소
+= 배정 자체를 제거
+= 제출 이력과 파일도 제거
+= 학생에게 숙제가 더 이상 보이지 않는 방향
+
+학생 관리 > 제출 이력 삭제
+= 제출 기록만 제거
+= 배정은 유지
+= 학생에게 숙제가 미제출 상태로 다시 남는 방향
+```
+
+## 레거시 정리
+
+파일:
+
+```text
+src/lib/assignmentTypes.ts
+docs/2026-06-01-legacy-cleanup-plan.md
+```
+
+이번 작업에서 사용처가 없는 legacy 숙제 타입 판별 코드를 제거했습니다.
+
+제거한 항목:
+
+- `LEGACY_ASSIGNMENT_TYPES`
+- `isLegacyAssignmentType`
+
+다만 `assignment_items` 자체는 아직 삭제하지 않았습니다.
+
+이유:
+
+- 기존 단일 숙제 화면이 `assignment.items[0]`를 사용합니다.
+- 기존 제출 API들이 `assignment_item_id` 기준으로 검증합니다.
+- `assignment_items`를 바로 삭제하면 기존 리스닝, 녹음, 라이팅, 단어장, 사진 제출 흐름이 깨질 수 있습니다.
+
+따라서 현재 정책은 아래와 같습니다.
+
+```text
+새 기능 기준: assignment_parts
+기존 호환/fallback: assignment_items
+```
+
+자세한 정리 계획은 아래 문서에 따로 남겼습니다.
+
+```text
+docs/2026-06-01-legacy-cleanup-plan.md
+```
+
 ## 퀴즈 선택지 정책 최종 상태
 
 ### 생성/편집
@@ -810,6 +1074,13 @@ assignments
 - 오답 후 재선택
 - 정답 후 재선택
 - 현재 선택이 정답일 때만 다음 이동
+- 문제 삭제 확인 모달
+- Part 삭제 확인 모달
+- 파일 1개당 10MB 제한
+- 숙제 저장 요청 전체 100MB 제한
+- 413 용량 초과 오류 명확화
+- 배정 취소 시 배정/제출/첨부 파일 hard delete
+- 학생 관리 제출 이력 삭제 시 제출/첨부 파일 삭제 및 배정 유지
 - draft 저장
 - 최종 제출 저장
 - 서버 정오답 계산

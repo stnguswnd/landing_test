@@ -660,6 +660,7 @@ function NewAssignmentForm() {
   const [newAssignmentId] = useState(createAssignmentId);
   const [alert, setAlert] = useState<{ title: string; message: string } | null>(null);
   const [partDeleteIndex, setPartDeleteIndex] = useState<number | null>(null);
+  const [quizQuestionDeleteTarget, setQuizQuestionDeleteTarget] = useState<{ partIndex: number; questionIndex: number } | null>(null);
   const [isSaving, startSaving] = useTransition();
   const [template, setTemplate] = useState<TemplateState>(emptyTemplate);
 
@@ -871,6 +872,12 @@ function NewAssignmentForm() {
         ? part.quizQuestions
         : part.quizQuestions.filter((_, index) => index !== questionIndex),
     });
+  }
+
+  function confirmRemoveQuizQuestion() {
+    if (!quizQuestionDeleteTarget) return;
+    removeQuizQuestion(quizQuestionDeleteTarget.partIndex, quizQuestionDeleteTarget.questionIndex);
+    setQuizQuestionDeleteTarget(null);
   }
 
   function updateQuizChoice(partIndex: number, questionIndex: number, choiceIndex: number, patch: Partial<QuizChoiceState>) {
@@ -1145,7 +1152,14 @@ function NewAssignmentForm() {
                           <article key={question.id ?? questionIndex} className="grid gap-4 rounded-lg border border-line bg-white p-4">
                             <div className="flex items-center justify-between gap-3">
                               <Badge tone="blue">Q{questionIndex + 1}</Badge>
-                              <Button type="button" variant="danger" onClick={() => removeQuizQuestion(index, questionIndex)} disabled={part.quizQuestions.length <= 1}>문제 삭제</Button>
+                              <Button
+                                type="button"
+                                variant="danger"
+                                onClick={() => setQuizQuestionDeleteTarget({ partIndex: index, questionIndex })}
+                                disabled={part.quizQuestions.length <= 1}
+                              >
+                                문제 삭제
+                              </Button>
                             </div>
                             <label className="grid gap-2 text-sm font-semibold">
                               문제 문장
@@ -1282,6 +1296,15 @@ function NewAssignmentForm() {
           confirmLabel="삭제"
           onCancel={() => setPartDeleteIndex(null)}
           onConfirm={confirmRemovePart}
+        />
+      )}
+      {quizQuestionDeleteTarget && (
+        <ConfirmModal
+          title="문제를 삭제하시겠습니까?"
+          message={`${template.parts[quizQuestionDeleteTarget.partIndex]?.title || `Part ${quizQuestionDeleteTarget.partIndex + 1}`}의 Q${quizQuestionDeleteTarget.questionIndex + 1} 문제를 삭제합니다. 저장 전까지는 화면에서만 삭제된 상태입니다.`}
+          confirmLabel="삭제"
+          onCancel={() => setQuizQuestionDeleteTarget(null)}
+          onConfirm={confirmRemoveQuizQuestion}
         />
       )}
     </TeacherLayout>
