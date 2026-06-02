@@ -97,21 +97,6 @@ export function RlRecordingHomework({ assignment, partMode, draftAttachments = [
     await recorder.startRecording();
   }
 
-  async function playOriginalAndStartRecording() {
-    recordedAudioRef.current?.pause();
-    setStep(2);
-    setError("");
-    const originalAudio = audioRef.current;
-    if (originalAudio) {
-      originalAudio.pause();
-      originalAudio.currentTime = 0;
-      originalAudio.volume = 0.7;
-    }
-    const started = await recorder.startRecording();
-    if (!started) return;
-    await originalAudio?.play().catch(() => undefined);
-  }
-
   function stopRecording() {
     audioRef.current?.pause();
     recorder.stopRecording();
@@ -197,12 +182,6 @@ export function RlRecordingHomework({ assignment, partMode, draftAttachments = [
         ) : (
           <>
             <h2 className="font-bold">내 녹음</h2>
-            {item?.audioUrl && (
-              <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-4">
-                <AudioPlayer ref={audioRef} controls={false} className="h-0 opacity-0" src={item.audioUrl} preload="auto" onEnded={() => setHasListenedFullAudio(true)} />
-                <p className="text-sm font-bold text-action">원본 MP3를 들으면서 바로 녹음할 수 있습니다.</p>
-              </div>
-            )}
             <div className="mt-4">
               <RecordingStatusBar
                 seconds={recorder.durationSec}
@@ -229,9 +208,7 @@ export function RlRecordingHomework({ assignment, partMode, draftAttachments = [
               {recorder.state === "recording" ? (
                 <Button type="button" variant="danger" onClick={stopRecording}>녹음 완료</Button>
               ) : (
-                <Button type="button" onClick={item?.audioUrl ? playOriginalAndStartRecording : startRecording}>
-                  {recorder.previewUrl ? "다시 녹음하기" : item?.audioUrl ? "재생 + 녹음 시작" : "녹음 시작"}
-                </Button>
+                <Button type="button" onClick={startRecording}>{recorder.previewUrl ? "다시 녹음하기" : "녹음 시작"}</Button>
               )}
               <Button type="button" variant="secondary" onClick={recorder.resetRecording} disabled={!recorder.previewUrl}>초기화하기</Button>
             </div>
