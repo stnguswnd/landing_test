@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { StudentLayout } from "@/components/layout/StudentLayout";
 import { normalizeAssignmentType } from "@/lib/assignmentTypes";
 import { studentAssignmentRepository } from "@/features/assignments/repositories/studentAssignmentRepository";
+import type { AssignmentType } from "@/lib/assignmentTypes";
 import { getStudentSession } from "@/server/auth/studentSession";
 import type { Assignment } from "@/types/assignment";
 import { ListeningHomework } from "./ListeningHomework";
@@ -14,7 +15,7 @@ import { VocabularyRecordingHomework } from "./VocabularyRecordingHomework";
 import { WritingHomework } from "./WritingHomework";
 
 function HomeworkByType({ assignment }: { assignment: Assignment }) {
-  const assignmentType = normalizeAssignmentType(assignment.assignmentType);
+  const assignmentType = effectiveAssignmentType(assignment);
   const isPhotoSubmission = assignmentType === "photo_submission" || assignment.items.some((item) => item.itemType === "photo_submission");
 
   if (isPhotoSubmission) return <PhotoSubmissionHomework assignment={{ ...assignment, assignmentType: "photo_submission" }} />;
@@ -26,7 +27,7 @@ function HomeworkByType({ assignment }: { assignment: Assignment }) {
 }
 
 function layoutTitle(assignment: Assignment) {
-  const assignmentType = normalizeAssignmentType(assignment.assignmentType);
+  const assignmentType = effectiveAssignmentType(assignment);
   if (assignmentType === "photo_submission") return "사진 제출 숙제";
   if (assignmentType === "listening") return "리스닝 숙제";
   if (assignmentType === "writing") return "라이팅 숙제";
@@ -34,6 +35,29 @@ function layoutTitle(assignment: Assignment) {
   if (assignmentType === "vocabulary_recording") return "단어장 녹음 숙제";
   if (assignmentType === "quiz") return "퀴즈 숙제";
   return "듣고녹음하기 숙제";
+}
+
+function effectiveAssignmentType(assignment: Assignment): AssignmentType {
+  const activeContentParts = (assignment.parts ?? []).filter((part) => part.status === "active" && part.partType !== "instruction");
+  if (activeContentParts.length === 1) {
+    const partType = activeContentParts[0].partType;
+    if (partType === "listening") return "listening";
+    if (partType === "writing") return "writing";
+    if (partType === "photo_submission") return "photo_submission";
+    if (partType === "quiz") return "quiz";
+    if (partType === "vocabulary_example") return "vocabulary_example";
+    if (partType === "vocabulary_recording") return "vocabulary_recording";
+    return "listening_recording";
+  }
+
+  const itemType = assignment.items[0]?.itemType;
+  if (itemType === "listening") return "listening";
+  if (itemType === "writing_prompt") return "writing";
+  if (itemType === "photo_submission") return "photo_submission";
+  if (itemType === "quiz_prompt") return "quiz";
+  if (itemType === "vocabulary_example") return "vocabulary_example";
+  if (itemType === "vocabulary_recording") return "vocabulary_recording";
+  return normalizeAssignmentType(assignment.assignmentType);
 }
 
 export default async function StudentAssignmentPage({

@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { studentAssignmentRepository } from "@/features/assignments/repositories/studentAssignmentRepository";
 import { getStudentCalendarEvents, getStudentTestResults, getStudentUpcomingTests, getStudentVisibleNotices } from "@/lib/dashboardData";
 import { formatTimeRange } from "@/lib/calendarTypes";
-import { assignmentTypeLabel as formatAssignmentTypeLabel } from "@/lib/assignmentTypes";
+import { assignmentTypeLabel as formatAssignmentTypeLabel, normalizeAssignmentType, type AssignmentType } from "@/lib/assignmentTypes";
 import { query } from "@/lib/postgres";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { storageBuckets } from "@/lib/supabase/storage";
@@ -64,20 +64,58 @@ function assignmentTypeLabel(type: string) {
 
 function assignmentTypeTags(assignment: AssignmentWithTarget) {
   const activeParts = (assignment.parts ?? []).filter((part) => part.status === "active");
-  if (activeParts.length === 0) return [assignmentTypeLabel(assignment.assignmentType)];
+  if (activeParts.length === 0) return [assignmentTypeLabel(effectiveAssignmentType(assignment))];
 
   const labels = activeParts.map((part) => assignmentTypeLabel(part.partType));
   return Array.from(new Set(labels));
+}
+
+function effectiveAssignmentType(assignment: AssignmentWithTarget): AssignmentType {
+  const activeContentParts = (assignment.parts ?? []).filter((part) => part.status === "active" && part.partType !== "instruction");
+  if (activeContentParts.length === 1) {
+    const partType = activeContentParts[0].partType;
+    if (partType === "listening") return "listening";
+    if (partType === "writing") return "writing";
+    if (partType === "photo_submission") return "photo_submission";
+    if (partType === "quiz") return "quiz";
+    if (partType === "vocabulary_example") return "vocabulary_example";
+    if (partType === "vocabulary_recording") return "vocabulary_recording";
+    return "listening_recording";
+  }
+
+  const itemType = assignment.items[0]?.itemType;
+  if (itemType === "listening") return "listening";
+  if (itemType === "writing_prompt") return "writing";
+  if (itemType === "photo_submission") return "photo_submission";
+  if (itemType === "quiz_prompt") return "quiz";
+  if (itemType === "vocabulary_example") return "vocabulary_example";
+  if (itemType === "vocabulary_recording") return "vocabulary_recording";
+  return normalizeAssignmentType(assignment.assignmentType);
 }
 
 function subjectForAssignment(assignment: AssignmentWithTarget) {
   return assignment.assignmentSubject ?? "Phonics";
 }
 
+function hasOutdatedRecordingSubmission(assignment: AssignmentWithTarget) {
+  const activeParts = (assignment.parts ?? []).filter((part) => part.status === "active");
+  const hasRecordingPart = activeParts.some((part) => part.partType === "recording" || part.partType === "vocabulary_recording");
+  const currentType = effectiveAssignmentType(assignment);
+  const currentRequiresRecording = activeParts.length > 0
+    ? hasRecordingPart
+    : currentType === "listening_recording" || currentType === "vocabulary_recording";
+  return !currentRequiresRecording && assignment.items.some((item) => Boolean(item.recordingUrl));
+}
+
+function hasCurrentSubmission(assignment: AssignmentWithTarget) {
+  return Boolean(assignment.submittedAt) && !hasOutdatedRecordingSubmission(assignment);
+}
+
 function homeworkStatus(assignment: AssignmentWithTarget) {
+  if (hasOutdatedRecordingSubmission(assignment)) return "incomplete";
   if (assignment.targetStatus === "reviewed" || assignment.targetStatus === "completed") return "completed";
   if (assignment.targetStatus === "returned") return "returned";
-  if (assignment.submittedAt || assignment.targetStatus === "submitted" || assignment.targetStatus === "pending_review") return "pending_review";
+  if (hasCurrentSubmission(assignment) || assignment.targetStatus === "submitted" || assignment.targetStatus === "pending_review") return "pending_review";
   return "incomplete";
 }
 
@@ -265,7 +303,7 @@ function HomeworkSubjectCard({ assignment }: { assignment: AssignmentWithTarget 
   const status = homeworkStatus(assignment);
   const item = assignment.items[0];
   const needsResubmit = assignment.targetStatus === "returned";
-  const hasSubmitted = Boolean(assignment.submittedAt);
+  const hasSubmitted = hasCurrentSubmission(assignment);
   const hasDraft = Boolean(assignment.draft) && !hasSubmitted && !needsResubmit;
   const href = hasSubmitted && !needsResubmit ? `/student/assignments/${assignment.id}/complete` : `/student/assignments/${assignment.id}`;
   const buttonLabel = needsResubmit ? "다시 제출하기" : hasSubmitted ? "제출 내용 보기" : hasDraft ? "숙제 이어하기" : "숙제하기";
@@ -298,7 +336,7 @@ function HomeworkSubjectCard({ assignment }: { assignment: AssignmentWithTarget 
         {(status === "completed" || status === "returned") && assignment.teacherComment && (
           <p className="mt-2 text-sm leading-6 text-slate-700">선생님 메모: {assignment.teacherComment}</p>
         )}
-        {assignment.submittedAt && <p className="mt-2 text-xs font-semibold text-slate-500">제출 {formatDateTime(assignment.submittedAt)}</p>}
+        {hasSubmitted && <p className="mt-2 text-xs font-semibold text-slate-500">제출 {formatDateTime(assignment.submittedAt)}</p>}
       </div>
       <Button href={href} className="mt-4 min-h-10 w-full px-3 text-xs sm:min-h-12 sm:text-sm">
         {buttonLabel}

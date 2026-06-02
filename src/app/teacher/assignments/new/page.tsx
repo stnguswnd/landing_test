@@ -134,6 +134,23 @@ function partTypeForAssignmentType(type: AssignmentType | ""): AssignmentPartTyp
   return "recording";
 }
 
+function assignmentTypeForPartType(type: AssignmentPartType): AssignmentType {
+  if (type === "listening") return "listening";
+  if (type === "writing") return "writing";
+  if (type === "photo_submission") return "photo_submission";
+  if (type === "quiz") return "quiz";
+  if (type === "vocabulary_example") return "vocabulary_example";
+  if (type === "vocabulary_recording") return "vocabulary_recording";
+  return "listening_recording";
+}
+
+function assignmentTypeForParts(parts: AssignmentPartState[]): AssignmentType {
+  const contentParts = parts.filter((part) => part.partType !== "instruction");
+  const types = Array.from(new Set(contentParts.map((part) => assignmentTypeForPartType(part.partType))));
+  if (types.length === 1) return types[0];
+  return "listening_recording";
+}
+
 function partAllowsSubmission(type: AssignmentPartType) {
   return type !== "instruction" && type !== "listening";
 }
@@ -968,7 +985,7 @@ function NewAssignmentForm() {
       });
       return;
     }
-    const effectiveType: AssignmentType = "listening_recording";
+    const effectiveType = assignmentTypeForParts(template.parts);
     const vocabularyRows = template.parts.flatMap((part) => validVocabularyRows(part.vocabularyRows));
     if (isVocabulary && vocabularyRows.length === 0) {
       setAlert({
