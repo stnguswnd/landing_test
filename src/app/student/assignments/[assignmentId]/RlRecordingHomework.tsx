@@ -107,10 +107,9 @@ export function RlRecordingHomework({ assignment, partMode, draftAttachments = [
       originalAudio.currentTime = 0;
       originalAudio.volume = 0.7;
     }
-    const recordingPromise = recorder.startRecording();
-    const playbackPromise = originalAudio?.play().catch(() => undefined);
-    await recordingPromise;
-    await playbackPromise;
+    const started = await recorder.startRecording();
+    if (!started) return;
+    await originalAudio?.play().catch(() => undefined);
   }
 
   function stopRecording() {
@@ -200,7 +199,7 @@ export function RlRecordingHomework({ assignment, partMode, draftAttachments = [
             <h2 className="font-bold">내 녹음</h2>
             {item?.audioUrl && (
               <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-4">
-                <AudioPlayer ref={audioRef} className="hidden" src={item.audioUrl} preload="auto" onEnded={() => setHasListenedFullAudio(true)} />
+                <AudioPlayer ref={audioRef} controls={false} className="h-0 opacity-0" src={item.audioUrl} preload="auto" onEnded={() => setHasListenedFullAudio(true)} />
                 <p className="text-sm font-bold text-action">원본 MP3를 들으면서 바로 녹음할 수 있습니다.</p>
               </div>
             )}
