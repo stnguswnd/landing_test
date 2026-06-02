@@ -98,7 +98,7 @@ function eventLabel(type: StudentCalendarEvent["type"]) {
   if (type === "test") return "시험";
   if (type === "cancelled" || type === "cancelled_class") return "휴강";
   if (type === "makeup" || type === "makeup_class") return "보강";
-  if (type === "class") return "수업";
+  if (type === "class") return "정규 수업";
   if (type === "notice") return "공지";
   return "기타";
 }
@@ -142,6 +142,15 @@ function compareEventsByTime(left: StudentCalendarEvent, right: StudentCalendarE
   const timeOrder = (left.startTime ?? "99:99").localeCompare(right.startTime ?? "99:99");
   if (timeOrder !== 0) return timeOrder;
   return left.title.localeCompare(right.title);
+}
+
+function calendarMarkerClass(type: StudentCalendarEvent["type"]) {
+  if (type === "cancelled" || type === "cancelled_class") return "bg-red-50 text-red-700";
+  if (type === "test") return "bg-yellow-50 text-yellow-700";
+  if (type === "makeup" || type === "makeup_class") return "bg-green-50 text-green-700";
+  if (type === "assignment" || type === "assignment_due") return "bg-violet-50 text-violet-700";
+  if (type === "class") return "bg-blue-50 text-blue-700";
+  return "bg-slate-100 text-slate-600";
 }
 
 export function StudentCalendarClient({ events }: { events: StudentCalendarEvent[] }) {
@@ -241,19 +250,17 @@ export function StudentCalendarClient({ events }: { events: StudentCalendarEvent
                 {date && (
                   <>
                     <span className="font-bold">{Number(date.slice(-2))}</span>
-                    <div className="mt-1 flex flex-wrap gap-1">
+                    <div className="mt-1 grid gap-1">
                       {dayEvents.slice(0, 3).map((event) => (
                         <span
                           key={event.id}
                           className={cn(
-                            "h-2 w-2 rounded-full",
-                            (event.type === "cancelled" || event.type === "cancelled_class") && "bg-red-500",
-                            event.type === "test" && "bg-yellow-500",
-                            (event.type === "makeup" || event.type === "makeup_class") && "bg-green-500",
-                            (event.type === "assignment" || event.type === "assignment_due") && "bg-blue-500",
-                            (event.type === "class" || event.type === "notice" || event.type === "etc") && "bg-slate-400",
+                            "truncate rounded px-1.5 py-0.5 text-[10px] font-bold leading-4",
+                            calendarMarkerClass(event.type),
                           )}
-                        />
+                        >
+                          {eventLabel(event.type)}
+                        </span>
                       ))}
                     </div>
                     {dayEvents.length > 3 && <p className="mt-1 text-[11px] font-bold text-slate-500">+{dayEvents.length - 3}</p>}
