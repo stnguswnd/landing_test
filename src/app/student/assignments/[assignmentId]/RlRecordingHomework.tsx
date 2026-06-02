@@ -86,7 +86,7 @@ export function RlRecordingHomework({ assignment, partMode, draftAttachments = [
     if (nextStep === 2 && !hasListenedFullAudio) return;
     audioRef.current?.pause();
     recordedAudioRef.current?.pause();
-    if (recorder.state === "recording") recorder.stopRecording();
+    if (recorder.state === "recording") stopRecording();
     setStep(nextStep);
   }
 
@@ -101,12 +101,21 @@ export function RlRecordingHomework({ assignment, partMode, draftAttachments = [
     recordedAudioRef.current?.pause();
     setStep(2);
     setError("");
-    await recorder.startRecording();
-    if (audioRef.current) {
-      audioRef.current.currentTime = 0;
-      audioRef.current.volume = 0.3;
-      audioRef.current.play().catch(() => undefined);
+    const originalAudio = audioRef.current;
+    if (originalAudio) {
+      originalAudio.pause();
+      originalAudio.currentTime = 0;
+      originalAudio.volume = 0.7;
     }
+    const recordingPromise = recorder.startRecording();
+    const playbackPromise = originalAudio?.play().catch(() => undefined);
+    await recordingPromise;
+    await playbackPromise;
+  }
+
+  function stopRecording() {
+    audioRef.current?.pause();
+    recorder.stopRecording();
   }
 
   function playOriginalAudio() {
@@ -191,6 +200,7 @@ export function RlRecordingHomework({ assignment, partMode, draftAttachments = [
             <h2 className="font-bold">내 녹음</h2>
             {item?.audioUrl && (
               <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-4">
+                <AudioPlayer ref={audioRef} className="hidden" src={item.audioUrl} preload="auto" onEnded={() => setHasListenedFullAudio(true)} />
                 <p className="text-sm font-bold text-action">원본 MP3를 들으면서 바로 녹음할 수 있습니다.</p>
                 <Button type="button" className="mt-3 w-full" onClick={playOriginalAndStartRecording} disabled={isRecorderBusy}>
                   원본 MP3 재생 + 녹음 시작
@@ -221,7 +231,7 @@ export function RlRecordingHomework({ assignment, partMode, draftAttachments = [
             )}
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               {recorder.state === "recording" ? (
-                <Button type="button" variant="danger" onClick={recorder.stopRecording}>녹음 완료</Button>
+                <Button type="button" variant="danger" onClick={stopRecording}>녹음 완료</Button>
               ) : (
                 <Button type="button" onClick={startRecording}>{recorder.previewUrl ? "다시 녹음하기" : "녹음 시작"}</Button>
               )}
