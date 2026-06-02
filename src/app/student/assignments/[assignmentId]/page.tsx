@@ -8,7 +8,6 @@ import type { Assignment } from "@/types/assignment";
 import { ListeningHomework } from "./ListeningHomework";
 import { MultiPartHomework } from "./MultiPartHomework";
 import { PhotoSubmissionHomework } from "./PhotoSubmissionHomework";
-import { QuizHomework } from "./QuizHomework";
 import { RlRecordingHomework } from "./RlRecordingHomework";
 import { VocabularyExampleHomework } from "./VocabularyExampleHomework";
 import { VocabularyRecordingHomework } from "./VocabularyRecordingHomework";
@@ -53,11 +52,9 @@ export default async function StudentAssignmentPage({
 
   return (
     <StudentLayout title={layoutTitle(assignment)}>
-      {activeParts.length > 1
+      {activeParts.length > 0
         ? <MultiPartHomework assignment={assignment} />
-        : activeParts[0]?.partType === "quiz"
-          ? <QuizHomework assignment={assignment} part={activeParts[0]} />
-          : <HomeworkByType assignment={assignment} />}
+        : <HomeworkByType assignment={assignment} />}
     </StudentLayout>
   );
 }

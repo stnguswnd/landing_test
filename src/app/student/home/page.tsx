@@ -209,7 +209,6 @@ function StudentTeamHeader({
         <div>
           <div className="flex items-center gap-3">
             {classLogoUrl && <img src={classLogoUrl} alt={`${classNames[0] ?? "class"} logo`} className="h-[72px] w-[72px] rounded-md object-cover" />}
-            <span className="inline-flex w-fit rounded-full bg-white/18 px-4 py-2 text-sm font-bold text-[#dcfce7] ring-1 ring-white/25">{classNames[0] ?? "배정된 반 없음"}</span>
           </div>
           <h1 className="mt-5 max-w-2xl text-[clamp(2.2rem,7vw,4.2rem)] font-bold leading-[1.25] tracking-[-0.04em]">
             {studentName} 학생의 오늘 학습을 확인해요

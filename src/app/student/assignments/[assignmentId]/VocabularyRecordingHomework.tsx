@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/Card";
 import type { Assignment, StudentAssignmentDraftAttachment } from "@/types/assignment";
 import type { PartMode } from "./partMode";
 import { ReadyStepButton } from "./ReadyStepButton";
+import { RecordingStatusBar } from "./RecordingStatusBar";
 import { SubmissionAlertModal } from "./SubmissionAlertModal";
 
 function formatDateTime(value?: string | null) {
@@ -152,10 +153,12 @@ export function VocabularyRecordingHomework({ assignment, partMode, draftAttachm
 
       <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-line bg-white/95 p-4 backdrop-blur">
         <div className="mx-auto grid max-w-5xl gap-4 rounded-2xl border border-line bg-white p-4 shadow-soft">
-          <div className="flex items-center gap-4">
-            <span className="w-20 text-xl font-extrabold text-action">{formatSeconds(recordingSeconds)}</span>
-            <div className="h-10 flex-1 rounded-full bg-gradient-to-r from-blue-100 via-blue-500 to-blue-100 opacity-80" />
-          </div>
+          <RecordingStatusBar
+            seconds={recordingSeconds}
+            isRecording={recordingStatus === "recording"}
+            formatSeconds={formatSeconds}
+          />
+          {recordingStatus === "recorded" && <p className="text-sm font-semibold text-action">녹음 완료</p>}
           {recordingUrl && (
             <audio
               ref={recordedAudioRef}

@@ -310,10 +310,21 @@ function createLegacyPart(data: {
     writingExample?: string;
     minRecordingSec?: number;
     maxRecordingSec?: number;
+    audioFileName?: string;
+    audioUrl?: string;
   };
 }, index: number): AssignmentPartState {
   const part = createPart(data.type ?? "listening_recording", index);
   const scriptText = data.item?.passageText || data.item?.promptText || "";
+  const legacyAudioAttachment = data.item?.audioUrl
+    ? [{
+        id: `legacy-audio-${index}`,
+        attachmentType: "audio" as const,
+        fileName: data.item.audioFileName || "audio",
+        fileUrl: data.item.audioUrl,
+        orderIndex: 0,
+      }]
+    : [];
   return {
     ...part,
     title: data.item?.title || part.title,
@@ -325,7 +336,98 @@ function createLegacyPart(data: {
     writingExample: data.item?.writingExample ?? "",
     minSubmissionCount: String(data.item?.minRecordingSec ?? part.minSubmissionCount),
     maxSubmissionCount: String(data.item?.maxRecordingSec ?? part.maxSubmissionCount),
+    attachments: legacyAudioAttachment,
   };
+}
+
+function assignmentPartsFromApi(assignment: {
+  type?: AssignmentType;
+  item?: Parameters<typeof createLegacyPart>[0]["item"];
+  parts?: Array<{
+    id?: string;
+    partType?: AssignmentPartType;
+    title?: string;
+    instruction?: string;
+    scriptText?: string;
+    writingMode?: WritingMode;
+    writingUnit?: WritingUnit;
+    writingHint?: string;
+    writingExample?: string;
+    vocabularyItems?: VocabularyRow[];
+    isRequired?: boolean;
+    allowSubmission?: boolean;
+    minSubmissionCount?: number;
+    maxSubmissionCount?: number;
+    status?: string;
+    attachments?: AssignmentPartAttachmentState[];
+    quizQuestions?: Array<{
+      id?: string;
+      questionText?: string;
+      explanation?: string;
+      choices?: QuizChoiceState[];
+      attachments?: QuizQuestionAttachmentState[];
+    }>;
+  }>;
+}) {
+  const legacyAudioAttachment = assignment.item?.audioUrl
+    ? [{
+        id: "legacy-audio-0",
+        attachmentType: "audio" as const,
+        fileName: assignment.item.audioFileName || "audio",
+        fileUrl: assignment.item.audioUrl,
+        orderIndex: 0,
+      }]
+    : [];
+  return assignment.parts?.length
+    ? assignment.parts
+        .filter((part) => part.status !== "archived")
+        .map((part, index) => {
+          const attachments = part.attachments ?? [];
+          const hasPartAudio = attachments.some((attachment) => attachment.attachmentType === "audio");
+          return {
+            id: part.id,
+            partType: part.partType ?? createPart(assignment.type ?? "listening_recording", index).partType,
+            title: part.title ?? `Part ${index + 1}`,
+            instruction: part.instruction ?? "",
+            scriptText: part.scriptText ?? "",
+            writingMode: part.writingMode ?? "picture_description",
+            writingUnit: part.writingUnit ?? "paragraphs",
+            writingHint: part.writingHint ?? "",
+            writingExample: part.writingExample ?? "",
+            vocabularyRows: part.vocabularyItems?.length
+              ? part.vocabularyItems.map((item) => ({ word: item.word, meaning: item.meaning }))
+              : (part.partType === "vocabulary_example" || part.partType === "vocabulary_recording" ? defaultVocabularyRows() : []),
+            isRequired: part.isRequired ?? true,
+            allowSubmission: part.allowSubmission ?? partAllowsSubmission(part.partType ?? "recording"),
+            minSubmissionCount: String(part.minSubmissionCount ?? 0),
+            maxSubmissionCount: String(part.maxSubmissionCount ?? 1),
+            imageFiles: [],
+            audioFiles: [],
+            attachments: index === 0 && !hasPartAudio ? [...attachments, ...legacyAudioAttachment] : attachments,
+            quizQuestions: part.partType === "quiz"
+              ? (part.quizQuestions?.length
+                ? part.quizQuestions.map((question, questionIndex) => ({
+                    id: question.id,
+                    questionText: question.questionText ?? "",
+                    explanation: question.explanation ?? "",
+                    choices: question.choices?.length
+                      ? question.choices.map((choice, choiceIndex) => ({
+                          id: choice.id,
+                          choiceLabel: choice.choiceLabel || String(choiceIndex + 1),
+                          choiceText: choice.choiceText,
+                          isCorrect: choice.isCorrect,
+                          incorrectReason: choice.incorrectReason ?? "",
+                        }))
+                      : [createQuizChoice(0, true), createQuizChoice(1)],
+                    imageFiles: [],
+                    audioFiles: [],
+                    attachments: question.attachments ?? [],
+                  }))
+                : [createQuizQuestion(0)])
+              : [],
+          };
+        })
+    : [createLegacyPart(assignment, 0)];
 }
 
 function createAssignmentId() {
@@ -697,75 +799,7 @@ function NewAssignmentForm() {
         vocabularyRows: data.assignment.vocabularyItems?.length
           ? data.assignment.vocabularyItems.map((item: { word: string; meaning: string }) => ({ word: item.word, meaning: item.meaning }))
           : emptyTemplate().vocabularyRows,
-        parts: data.assignment.parts?.length
-          ? data.assignment.parts
-              .filter((part: { status?: string }) => part.status !== "archived")
-              .map((part: {
-                id?: string;
-                partType?: AssignmentPartType;
-                title?: string;
-                instruction?: string;
-                scriptText?: string;
-                writingMode?: WritingMode;
-                writingUnit?: WritingUnit;
-                writingHint?: string;
-                writingExample?: string;
-                vocabularyItems?: VocabularyRow[];
-                isRequired?: boolean;
-                allowSubmission?: boolean;
-                minSubmissionCount?: number;
-                maxSubmissionCount?: number;
-                attachments?: AssignmentPartAttachmentState[];
-                quizQuestions?: Array<{
-                  id?: string;
-                  questionText?: string;
-                  explanation?: string;
-                  choices?: QuizChoiceState[];
-                  attachments?: QuizQuestionAttachmentState[];
-                }>;
-              }, index: number) => ({
-                id: part.id,
-                partType: part.partType ?? createPart(data.assignment.type ?? "listening_recording", index).partType,
-                title: part.title ?? `Part ${index + 1}`,
-                instruction: part.instruction ?? "",
-                scriptText: part.scriptText ?? "",
-                writingMode: part.writingMode ?? "picture_description",
-                writingUnit: part.writingUnit ?? "paragraphs",
-                writingHint: part.writingHint ?? "",
-                writingExample: part.writingExample ?? "",
-                vocabularyRows: part.vocabularyItems?.length
-                  ? part.vocabularyItems.map((item) => ({ word: item.word, meaning: item.meaning }))
-                  : (part.partType === "vocabulary_example" || part.partType === "vocabulary_recording" ? defaultVocabularyRows() : []),
-                isRequired: part.isRequired ?? true,
-                allowSubmission: part.allowSubmission ?? partAllowsSubmission(part.partType ?? "recording"),
-                minSubmissionCount: String(part.minSubmissionCount ?? 0),
-                maxSubmissionCount: String(part.maxSubmissionCount ?? 1),
-                imageFiles: [],
-                audioFiles: [],
-                attachments: part.attachments ?? [],
-                quizQuestions: part.partType === "quiz"
-                  ? (part.quizQuestions?.length
-                    ? part.quizQuestions.map((question, questionIndex) => ({
-                        id: question.id,
-                        questionText: question.questionText ?? "",
-                        explanation: question.explanation ?? "",
-                        choices: question.choices?.length
-                          ? question.choices.map((choice, choiceIndex) => ({
-                              id: choice.id,
-                              choiceLabel: choice.choiceLabel || String(choiceIndex + 1),
-                              choiceText: choice.choiceText,
-                              isCorrect: choice.isCorrect,
-                              incorrectReason: choice.incorrectReason ?? "",
-                            }))
-                          : [createQuizChoice(0, true), createQuizChoice(1)],
-                        imageFiles: [],
-                        audioFiles: [],
-                        attachments: question.attachments ?? [],
-                      }))
-                    : [createQuizQuestion(0)])
-                  : [],
-              }))
-          : [createLegacyPart(data.assignment, 0)],
+        parts: assignmentPartsFromApi(data.assignment),
       });
     }
 
@@ -1020,6 +1054,7 @@ function NewAssignmentForm() {
           audioUrl: savedAssignment.item?.audioUrl ?? current.audioUrl,
           imageUrl: savedAssignment.imageUrl || current.imageUrl,
           imageFileName: savedAssignment.imageFileName ?? current.imageFileName,
+          parts: assignmentPartsFromApi(savedAssignment),
         }));
       }
       if (!response.ok) {
