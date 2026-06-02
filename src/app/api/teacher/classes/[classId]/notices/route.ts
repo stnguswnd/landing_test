@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { assertClass, createNotice, getClassNotices } from "@/lib/dashboardData";
+import { parseNoticeInput } from "@/server/teacher/noticeImageUpload";
 import { requireTeacherSession } from "@/server/teacher/session";
 
 export const runtime = "nodejs";
@@ -16,7 +17,7 @@ export async function POST(request: Request, context: { params: Promise<{ classI
   const { classId } = await context.params;
   if (!(await assertClass(teacherId, classId))) return NextResponse.json({ error: "반을 찾을 수 없습니다." }, { status: 404 });
   try {
-    const body = await request.json();
+    const body = await parseNoticeInput(request, teacherId);
     const noticeId = await createNotice(teacherId, body, { type: "class", classId });
     return NextResponse.json({ noticeId }, { status: 201 });
   } catch (error) {

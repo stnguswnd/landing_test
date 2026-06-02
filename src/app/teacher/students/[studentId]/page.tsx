@@ -7,6 +7,7 @@ import { TeacherLayout } from "@/components/layout/TeacherLayout";
 import { query } from "@/lib/postgres";
 import { assignmentTypeLabel as formatAssignmentTypeLabel } from "@/lib/assignmentTypes";
 import { getTeacherSession } from "@/server/teacher/session";
+import { SubmissionDeleteButton } from "./SubmissionDeleteButton";
 import type {
   ManagedStudent,
   StudentLearningHistory,
@@ -33,11 +34,14 @@ type HistoryRow = {
   date: string | Date;
   assignment_title: string;
   assignment_type: StudentLearningHistory["assignmentType"];
+  assignment_types: StudentLearningHistory["assignmentType"][] | null;
   class_name: string | null;
   submit_status: StudentLearningHistory["submitStatus"];
   score: number | null;
   review_status: StudentLearningHistory["reviewStatus"];
   detail_href: string | null;
+  submission_id: string | null;
+  assignment_target_id: string;
 };
 
 function toDate(value: string | Date) {
@@ -75,11 +79,14 @@ function mapHistory(row: HistoryRow): StudentLearningHistory {
     date: toDate(row.date),
     assignmentTitle: row.assignment_title,
     assignmentType: row.assignment_type,
+    assignmentTypes: row.assignment_types ?? [row.assignment_type],
     className: row.class_name ?? undefined,
     submitStatus: row.submit_status,
     score: row.score,
     reviewStatus: row.review_status,
     detailHref: row.detail_href ?? undefined,
+    submissionId: row.submission_id ?? undefined,
+    assignmentTargetId: row.assignment_target_id,
   };
 }
 
@@ -119,10 +126,18 @@ async function getLearningHistory(teacherId: string, studentId: string) {
     `
       select
         concat('history-', at.assignment_id, '-', at.student_id) as id,
+        at.id as assignment_target_id,
         at.student_id,
         coalesce(at.submitted_at, at.due_at, a.due_at, a.created_at)::date as date,
         a.title as assignment_title,
-        a.assignment_type,
+        coalesce(
+          case
+            when part_summary.part_count = 1 then
+              part_summary.assignment_types[1]
+          end,
+          a.assignment_type
+        ) as assignment_type,
+        coalesce(part_summary.assignment_types, array[a.assignment_type]) as assignment_types,
         c.name as class_name,
         case
           when sub.id is not null then 'submitted'
@@ -135,17 +150,39 @@ async function getLearningHistory(teacherId: string, studentId: string) {
           when sub.id is not null then 'pending'
           else 'none'
         end as review_status,
-        case when sub.id is not null then concat('/teacher/submissions/', sub.id) else null end as detail_href
+        case when sub.id is not null then concat('/teacher/submissions/', sub.id) else null end as detail_href,
+        sub.id as submission_id
       from assignment_targets at
       join assignments a on a.id = at.assignment_id and a.teacher_id = $2
       left join submissions sub on sub.assignment_id = a.id and sub.student_id = at.student_id
       left join teacher_feedback tf on tf.submission_id = sub.id
       left join classes c on c.id = coalesce(at.class_id, a.class_id) and c.teacher_id = a.teacher_id and c.status = 'active'
+      left join lateral (
+        select count(*)::int as part_count, array_agg(part_types.assignment_type order by part_types.first_order) as assignment_types
+        from (
+          select
+            case ap.part_type
+              when 'recording' then 'listening_recording'
+              else ap.part_type
+            end as assignment_type,
+            min(ap.order_index) as first_order
+          from assignment_parts ap
+          where ap.assignment_id = a.id
+            and ap.status = 'active'
+            and ap.part_type <> 'instruction'
+          group by
+            case ap.part_type
+              when 'recording' then 'listening_recording'
+              else ap.part_type
+            end
+        ) part_types
+      ) part_summary on true
       where at.student_id = $1
         and at.status <> 'cancelled'
         and (coalesce(at.class_id, a.class_id) is null or c.id is not null)
       group by
         at.assignment_id,
+        at.id,
         at.student_id,
         at.submitted_at,
         at.due_at,
@@ -153,9 +190,12 @@ async function getLearningHistory(teacherId: string, studentId: string) {
         a.created_at,
         a.title,
         a.assignment_type,
+        part_summary.part_count,
+        part_summary.assignment_types,
         c.name,
         sub.id,
         sub.status,
+        sub.id,
         at.reviewed,
         tf.id,
         tf.score
@@ -169,6 +209,17 @@ async function getLearningHistory(teacherId: string, studentId: string) {
 
 function assignmentTypeLabel(type: string) {
   return formatAssignmentTypeLabel(type);
+}
+
+function AssignmentTypeBadges({ item }: { item: StudentLearningHistory }) {
+  const types = item.assignmentTypes?.length ? item.assignmentTypes : [item.assignmentType];
+  return (
+    <div className="flex flex-wrap gap-1">
+      {types.map((type) => (
+        <Badge key={type}>{assignmentTypeLabel(type)}</Badge>
+      ))}
+    </div>
+  );
 }
 
 function submitStatusLabel(status: StudentLearningHistory["submitStatus"]) {
@@ -250,13 +301,13 @@ export default async function StudentLearningHistoryPage({
               </p>
             ) : (
               history.map((item) => (
-                <div key={item.id} className="grid gap-3 rounded-md border border-line p-4 lg:grid-cols-[120px_1fr_170px_140px_120px_140px] lg:items-center">
+                <div key={item.id} className="grid gap-3 rounded-md border border-line p-4 lg:grid-cols-[120px_1fr_170px_140px_120px_140px_120px] lg:items-center">
                   <p className="text-sm font-bold text-slate-500">{item.date}</p>
                   <div className="min-w-0">
                     <p className="truncate font-bold">{item.assignmentTitle}</p>
                     <p className="mt-1 text-sm text-slate-500">{item.className ?? "-"}</p>
                   </div>
-                  <Badge>{assignmentTypeLabel(item.assignmentType)}</Badge>
+                  <AssignmentTypeBadges item={item} />
                   <Badge tone={submitTone(item.submitStatus)}>{submitStatusLabel(item.submitStatus)}</Badge>
                   <Badge tone={reviewTone(item.reviewStatus)}>{reviewStatusLabel(item.reviewStatus)}</Badge>
                   {item.detailHref ? (
@@ -266,6 +317,11 @@ export default async function StudentLearningHistoryPage({
                   ) : (
                     <Button disabled variant="secondary">피드백 없음</Button>
                   )}
+                  <SubmissionDeleteButton
+                    studentId={student.id}
+                    submissionId={item.submissionId}
+                    assignmentTitle={item.assignmentTitle}
+                  />
                 </div>
               ))
             )}

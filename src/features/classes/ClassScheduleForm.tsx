@@ -121,8 +121,8 @@ export function ClassScheduleForm({ classId, event, onClose, onSaved }: { classI
             <>
               <label className="grid gap-2 text-sm font-semibold">날짜<Input type="date" value={eventDate} onChange={(event) => setEventDate(event.target.value)} /></label>
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="grid gap-2 text-sm font-semibold">시작 시간<Input type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} /></label>
-                <label className="grid gap-2 text-sm font-semibold">종료 시간<Input type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} /></label>
+                <label className="grid gap-2 text-sm font-semibold">시작 시간<Input type="time" step={300} value={startTime} onChange={(event) => setStartTime(event.target.value)} /></label>
+                <label className="grid gap-2 text-sm font-semibold">종료 시간<Input type="time" step={300} value={endTime} onChange={(event) => setEndTime(event.target.value)} /></label>
               </div>
             </>
           )}
@@ -167,7 +167,7 @@ function HourMinutePicker({ value, onChange }: { value: string; onChange: (value
   const hour = value.match(/^(\d{2}):(\d{2})/)?.[1] ?? "16";
   const minute = value.match(/^(\d{2}):(\d{2})/)?.[2] ?? "00";
   const hours = Array.from({ length: 14 }, (_, index) => index + 8);
-  const minutes = ["00", "10", "20", "30", "40", "50"];
+  const minutes = ["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"];
 
   function update(nextHour: string, nextMinute: string) {
     onChange(`${nextHour}:${nextMinute}`);

@@ -128,19 +128,13 @@ export function StudentManagementView({ initialStudents }: { initialStudents: Ma
     setToast("학생 정보가 수정되었습니다.");
   }
 
-  async function inactiveSelectedStudent() {
+  async function deleteSelectedStudent() {
     if (!selectedStudent) return;
     const nextStudents = await studentRepository.deleteStudent(selectedStudent.id, students);
     setStudents(nextStudents);
+    setSelectedStudentId(nextStudents[0]?.id ?? null);
     setIsDeleteConfirmOpen(false);
-    setToast("학생이 비활성화되었습니다.");
-  }
-
-  async function reactivateSelectedStudent() {
-    if (!selectedStudent) return;
-    const nextStudents = await studentRepository.updateStudent(selectedStudent.id, { status: "active" }, students);
-    setStudents(nextStudents);
-    setToast("학생이 재활성화되었습니다.");
+    setToast("학생이 삭제되었습니다.");
   }
 
   async function changePassword(password: string) {
@@ -174,6 +168,14 @@ export function StudentManagementView({ initialStudents }: { initialStudents: Ma
     setToast("학생이 등록되었습니다.");
   }
 
+  async function deleteLearningHistoryItem(item: StudentLearningHistory) {
+    if (!selectedStudent || !item.submissionId) return;
+    await studentRepository.deleteSubmissionHistory(selectedStudent.id, item.submissionId);
+    const nextHistory = await studentRepository.getLearningHistory(selectedStudent.id);
+    setLearningHistory(nextHistory);
+    setToast("제출 내역이 삭제되었습니다.");
+  }
+
   return (
     <div className="relative">
       {toast && <div className="fixed right-4 top-4 z-50 rounded-md bg-ink px-4 py-3 text-sm font-semibold text-white shadow-soft">{toast}</div>}
@@ -196,9 +198,9 @@ export function StudentManagementView({ initialStudents }: { initialStudents: Ma
           onStudentPassword={() => setPasswordTarget("student")}
           onParentPassword={() => setPasswordTarget("parent")}
           onDelete={() => setIsDeleteConfirmOpen(true)}
-          onReactivate={reactivateSelectedStudent}
           onUpdate={updateSelectedStudent}
           learningHistory={learningHistory}
+          onDeleteLearningHistory={deleteLearningHistoryItem}
           classes={classes}
         />
       </div>
@@ -213,10 +215,10 @@ export function StudentManagementView({ initialStudents }: { initialStudents: Ma
       )}
       {isDeleteConfirmOpen && (
         <ConfirmModal
-          title="학생 비활성화"
-          message="이 학생을 비활성화할까요? 제출 기록과 과제 이력은 유지됩니다."
+          title="학생 삭제"
+          message="이 학생을 삭제할까요? 학생과 연결된 과제 제출 이력도 함께 삭제됩니다."
           onCancel={() => setIsDeleteConfirmOpen(false)}
-          onConfirm={inactiveSelectedStudent}
+          onConfirm={deleteSelectedStudent}
         />
       )}
     </div>
@@ -279,9 +281,9 @@ function StudentDetailPanel({
   onStudentPassword,
   onParentPassword,
   onDelete,
-  onReactivate,
   onUpdate,
   learningHistory,
+  onDeleteLearningHistory,
   classes,
 }: {
   student: ManagedStudent | null;
@@ -291,9 +293,9 @@ function StudentDetailPanel({
   onStudentPassword: () => void;
   onParentPassword: () => void;
   onDelete: () => void;
-  onReactivate: () => void;
   onUpdate: (input: Partial<ManagedStudent>) => void;
   learningHistory: StudentLearningHistory[];
+  onDeleteLearningHistory: (item: StudentLearningHistory) => void | Promise<void>;
   classes: Class[];
 }) {
   if (!student) {
@@ -341,11 +343,10 @@ function StudentDetailPanel({
             onStudentPassword={onStudentPassword}
             onParentPassword={onParentPassword}
             onDelete={onDelete}
-            onReactivate={onReactivate}
             onUpdate={onUpdate}
           />
         )}
-        {activeTab === "learning" && <LearningTab history={learningHistory} />}
+        {activeTab === "learning" && <LearningTab history={learningHistory} onDelete={onDeleteLearningHistory} />}
       </div>
     </section>
   );
@@ -385,7 +386,6 @@ function DetailTab({
   onStudentPassword,
   onParentPassword,
   onDelete,
-  onReactivate,
   onUpdate,
 }: {
   student: ManagedStudent;
@@ -393,7 +393,6 @@ function DetailTab({
   onStudentPassword: () => void;
   onParentPassword: () => void;
   onDelete: () => void;
-  onReactivate: () => void;
   onUpdate: (input: Partial<ManagedStudent>) => void;
 }) {
   const [draft, setDraft] = useState(student);
@@ -459,11 +458,7 @@ function DetailTab({
         </DetailRow>
       </div>
       <div className="grid gap-2 sm:flex sm:justify-end">
-        {student.status === "inactive" ? (
-          <Button onClick={onReactivate}>학생 재활성화</Button>
-        ) : (
-          <Button variant="danger" onClick={onDelete}>학생 비활성화</Button>
-        )}
+        <Button variant="danger" onClick={onDelete}>학생 삭제</Button>
         <Button onClick={() => onUpdate({ ...draft, classIds: selectedClassIds })}>정보 수정</Button>
       </div>
     </div>
@@ -527,29 +522,68 @@ function Avatar({ avatarKey, selected }: { avatarKey: string; selected?: boolean
   );
 }
 
-function LearningTab({ history }: { history: StudentLearningHistory[] }) {
+function LearningTab({ history, onDelete }: { history: StudentLearningHistory[]; onDelete: (item: StudentLearningHistory) => void | Promise<void> }) {
+  const [deleteTarget, setDeleteTarget] = useState<StudentLearningHistory | null>(null);
+  const [deleteError, setDeleteError] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  async function confirmDelete() {
+    if (!deleteTarget?.submissionId) return;
+    setIsDeleting(true);
+    setDeleteError("");
+    try {
+      await onDelete(deleteTarget);
+      setDeleteTarget(null);
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "제출 내역 삭제 중 오류가 발생했습니다.");
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   if (history.length === 0) return <EmptyState>아직 학습 이력이 없습니다.</EmptyState>;
   return (
-    <Table headers={["날짜", "숙제명", "반", "유형", "제출 상태", "피드백 상태", "상세 보기"]}>
-      {history.map((item) => (
-        <tr key={item.id} className="border-t border-line">
-          <td className="py-3">{item.date}</td>
-          <td className="font-semibold">{item.assignmentTitle}</td>
-          <td>{item.className ?? "-"}</td>
-          <td>{assignmentTypeLabel(item.assignmentType)}</td>
-          <td><Badge tone={item.submitStatus === "submitted" ? "green" : item.submitStatus === "late" ? "yellow" : "red"}>{submitStatusLabel(item.submitStatus)}</Badge></td>
-          <td>{reviewStatusLabel(item.reviewStatus)}</td>
-          <td>{item.detailHref ? <Button href={item.detailHref} variant="secondary">상세</Button> : <Button disabled variant="secondary">상세</Button>}</td>
-        </tr>
-      ))}
-    </Table>
+    <>
+      <Table headers={["날짜", "숙제명", "반", "유형", "제출 상태", "피드백 상태", "상세 보기", "삭제"]}>
+        {history.map((item) => (
+          <tr key={item.id} className="border-t border-line">
+            <td className="py-3">{item.date}</td>
+            <td className="font-semibold">{item.assignmentTitle}</td>
+            <td>{item.className ?? "-"}</td>
+            <td><AssignmentTypeBadges item={item} /></td>
+            <td><Badge tone={item.submitStatus === "submitted" ? "green" : item.submitStatus === "late" ? "yellow" : "red"}>{submitStatusLabel(item.submitStatus)}</Badge></td>
+            <td>{reviewStatusLabel(item.reviewStatus)}</td>
+            <td>{item.detailHref ? <Button href={item.detailHref} variant="secondary">상세</Button> : <Button disabled variant="secondary">상세</Button>}</td>
+            <td>
+              <Button type="button" variant="danger" disabled={!item.submissionId} onClick={() => setDeleteTarget(item)}>
+                삭제하기
+              </Button>
+            </td>
+          </tr>
+        ))}
+      </Table>
+      {deleteTarget && (
+        <Modal title="제출 내역 삭제" onClose={() => setDeleteTarget(null)}>
+          <p className="text-sm leading-6 text-slate-700">
+            {deleteTarget.assignmentTitle} 제출 내역만 삭제할까요? 배정 이력은 남고 학생에게는 다시 미제출 과제로 보입니다.
+          </p>
+          {deleteError && <p className="mt-3 text-sm font-semibold text-danger">{deleteError}</p>}
+          <div className="mt-5 flex justify-end gap-2">
+            <Button type="button" variant="secondary" disabled={isDeleting} onClick={() => setDeleteTarget(null)}>취소</Button>
+            <Button type="button" variant="danger" disabled={isDeleting} onClick={confirmDelete}>
+              {isDeleting ? "삭제 중..." : "삭제하기"}
+            </Button>
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }
 
 function Table({ headers, children }: { headers: string[]; children: React.ReactNode }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[760px] text-left text-sm">
+      <table className="w-full min-w-[920px] text-left text-sm">
         <thead className="text-slate-500">
           <tr>{headers.map((header) => <th key={header} className="py-2 font-bold">{header}</th>)}</tr>
         </thead>
@@ -658,6 +692,17 @@ function ConfirmModal({ title, message, onCancel, onConfirm }: { title: string; 
 
 function assignmentTypeLabel(type: string) {
   return formatAssignmentTypeLabel(type);
+}
+
+function AssignmentTypeBadges({ item }: { item: StudentLearningHistory }) {
+  const types = item.assignmentTypes?.length ? item.assignmentTypes : [item.assignmentType];
+  return (
+    <div className="flex flex-wrap gap-1">
+      {types.map((type) => (
+        <Badge key={type}>{assignmentTypeLabel(type)}</Badge>
+      ))}
+    </div>
+  );
 }
 
 function submitStatusLabel(status: StudentLearningHistory["submitStatus"]) {

@@ -41,7 +41,22 @@ export async function POST(request: Request) {
         left join submissions sub on sub.assignment_id = at.assignment_id and sub.student_id = at.student_id
         where at.assignment_id = $1
           and at.student_id = $2
-          and a.assignment_type = 'listening'
+          and (
+            a.assignment_type = 'listening'
+            or exists (
+              select 1
+              from assignment_parts ap
+              where ap.assignment_id = a.id
+                and ap.status = 'active'
+                and ap.part_type = 'listening'
+            )
+            or exists (
+              select 1
+              from assignment_items ai
+              where ai.assignment_id = a.id
+                and ai.item_type = 'listening'
+            )
+          )
         limit 1
       `,
       [assignmentId, session.studentId, session.teacherId],
@@ -66,10 +81,15 @@ export async function POST(request: Request) {
           assignment_target_id = excluded.assignment_target_id,
           status = excluded.status,
           submitted_at = now(),
+          reviewed_at = null,
+          teacher_comment = null,
           updated_at = now()
       `,
       [submissionId, assignmentId, session.studentId, row.target_id, submissionStatus],
     );
+
+    await client.query("delete from submission_item_attachments where submission_id = $1", [submissionId]);
+    await client.query("delete from submission_items where submission_id = $1", [submissionId]);
 
     await client.query(
       "update assignment_targets set status = $2, submitted_at = now(), reviewed = false, updated_at = now() where id = $1",

@@ -74,9 +74,10 @@ export async function GET(request: NextRequest) {
     query<ClassCardRow>(
       `
         with class_students as (
-          select c.id as class_id, c.name as class_name, cm.student_id
+          select c.id as class_id, c.name as class_name, s.id as student_id
           from classes c
           left join class_memberships cm on cm.class_id = c.id
+          left join students s on s.id = cm.student_id and s.teacher_id = c.teacher_id and s.status = 'active'
           where c.teacher_id = $1 and c.status = 'active'
         ),
         class_targets as (
@@ -84,12 +85,22 @@ export async function GET(request: NextRequest) {
             cs.class_id,
             at.id as target_id,
             at.status as target_status,
+            at.reviewed as target_reviewed,
             sub.id as submission_id,
             sub.status as submission_status
           from class_students cs
-          left join assignment_targets at on at.student_id = cs.student_id
+          left join assignment_targets at
+            on at.student_id = cs.student_id
+           and at.class_id = cs.class_id
+           and at.status <> 'cancelled'
           left join assignments a on a.id = at.assignment_id and a.teacher_id = $1
-          left join submissions sub on sub.assignment_id = at.assignment_id and sub.student_id = at.student_id
+          left join lateral (
+            select sub.id, sub.status
+            from submissions sub
+            where sub.assignment_id = at.assignment_id and sub.student_id = at.student_id
+            order by sub.submitted_at desc nulls last, sub.updated_at desc
+            limit 1
+          ) sub on true
           where a.id is null
              or (coalesce(at.due_at, a.due_at, a.created_at) >= $2::date
              and coalesce(at.due_at, a.due_at, a.created_at) < ($3::date + interval '1 day'))
@@ -101,7 +112,11 @@ export async function GET(request: NextRequest) {
           count(distinct ct.target_id)::int as assigned_count,
           count(distinct ct.target_id) filter (where ct.target_status in ('submitted', 'late'))::int as submitted_count,
           count(distinct ct.target_id) filter (where ct.target_status = 'assigned')::int as missing_count,
-          count(distinct ct.target_id) filter (where ct.submission_id is not null and ct.submission_status <> 'reviewed')::int as needs_review_count
+          count(distinct ct.target_id) filter (
+            where ct.target_status in ('submitted', 'late')
+              and ct.target_reviewed is not true
+              and coalesce(ct.submission_status, '') <> 'reviewed'
+          )::int as needs_review_count
         from class_students cs
         left join class_targets ct on ct.class_id = cs.class_id
         group by cs.class_id, cs.class_name

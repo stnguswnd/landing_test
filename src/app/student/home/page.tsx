@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { studentAssignmentRepository } from "@/features/assignments/repositories/studentAssignmentRepository";
 import { getStudentCalendarEvents, getStudentTestResults, getStudentUpcomingTests, getStudentVisibleNotices } from "@/lib/dashboardData";
 import { formatTimeRange } from "@/lib/calendarTypes";
-import { assignmentTypeLabel as formatAssignmentTypeLabel } from "@/lib/assignmentTypes";
+import { assignmentTypeLabel as formatAssignmentTypeLabel, normalizeAssignmentType, type AssignmentType } from "@/lib/assignmentTypes";
 import { query } from "@/lib/postgres";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { storageBuckets } from "@/lib/supabase/storage";
@@ -62,14 +62,60 @@ function assignmentTypeLabel(type: string) {
   return formatAssignmentTypeLabel(type);
 }
 
+function assignmentTypeTags(assignment: AssignmentWithTarget) {
+  const activeParts = (assignment.parts ?? []).filter((part) => part.status === "active");
+  if (activeParts.length === 0) return [assignmentTypeLabel(effectiveAssignmentType(assignment))];
+
+  const labels = activeParts.map((part) => assignmentTypeLabel(part.partType));
+  return Array.from(new Set(labels));
+}
+
+function effectiveAssignmentType(assignment: AssignmentWithTarget): AssignmentType {
+  const activeContentParts = (assignment.parts ?? []).filter((part) => part.status === "active" && part.partType !== "instruction");
+  if (activeContentParts.length === 1) {
+    const partType = activeContentParts[0].partType;
+    if (partType === "listening") return "listening";
+    if (partType === "writing") return "writing";
+    if (partType === "photo_submission") return "photo_submission";
+    if (partType === "quiz") return "quiz";
+    if (partType === "vocabulary_example") return "vocabulary_example";
+    if (partType === "vocabulary_recording") return "vocabulary_recording";
+    return "listening_recording";
+  }
+
+  const itemType = assignment.items[0]?.itemType;
+  if (itemType === "listening") return "listening";
+  if (itemType === "writing_prompt") return "writing";
+  if (itemType === "photo_submission") return "photo_submission";
+  if (itemType === "quiz_prompt") return "quiz";
+  if (itemType === "vocabulary_example") return "vocabulary_example";
+  if (itemType === "vocabulary_recording") return "vocabulary_recording";
+  return normalizeAssignmentType(assignment.assignmentType);
+}
+
 function subjectForAssignment(assignment: AssignmentWithTarget) {
   return assignment.assignmentSubject ?? "Phonics";
 }
 
+function hasOutdatedRecordingSubmission(assignment: AssignmentWithTarget) {
+  const activeParts = (assignment.parts ?? []).filter((part) => part.status === "active");
+  const hasRecordingPart = activeParts.some((part) => part.partType === "recording" || part.partType === "vocabulary_recording");
+  const currentType = effectiveAssignmentType(assignment);
+  const currentRequiresRecording = activeParts.length > 0
+    ? hasRecordingPart
+    : currentType === "listening_recording" || currentType === "vocabulary_recording";
+  return !currentRequiresRecording && assignment.items.some((item) => Boolean(item.recordingUrl));
+}
+
+function hasCurrentSubmission(assignment: AssignmentWithTarget) {
+  return Boolean(assignment.submittedAt) && !hasOutdatedRecordingSubmission(assignment);
+}
+
 function homeworkStatus(assignment: AssignmentWithTarget) {
+  if (hasOutdatedRecordingSubmission(assignment)) return "incomplete";
   if (assignment.targetStatus === "reviewed" || assignment.targetStatus === "completed") return "completed";
   if (assignment.targetStatus === "returned") return "returned";
-  if (assignment.submittedAt || assignment.targetStatus === "submitted" || assignment.targetStatus === "pending_review") return "pending_review";
+  if (hasCurrentSubmission(assignment) || assignment.targetStatus === "submitted" || assignment.targetStatus === "pending_review") return "pending_review";
   return "incomplete";
 }
 
@@ -95,6 +141,30 @@ function formatDate(value?: string | null) {
 function formatDateTime(value?: string | null) {
   if (!value) return "-";
   return new Intl.DateTimeFormat("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Seoul" }).format(new Date(value));
+}
+
+function todayDate() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const year = parts.find((part) => part.type === "year")?.value ?? "2026";
+  const month = parts.find((part) => part.type === "month")?.value ?? "06";
+  const day = parts.find((part) => part.type === "day")?.value ?? "01";
+  return `${year}-${month}-${day}`;
+}
+
+function toDateString(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function calendarRangeAroundToday() {
+  const today = new Date(`${todayDate()}T00:00:00`);
+  const start = new Date(today.getFullYear(), today.getMonth() - 12, 1);
+  const end = new Date(today.getFullYear(), today.getMonth() + 13, 0);
+  return { start: toDateString(start), end: toDateString(end) };
 }
 
 async function signedLogoUrl(path: string | null) {
@@ -132,11 +202,12 @@ export default async function StudentHomePage() {
     redirect("/login");
   }
 
+  const calendarRange = calendarRangeAroundToday();
   const [assignments, profile, notices, calendarEvents, upcomingTests, testResults] = await Promise.all([
     studentAssignmentRepository.getAssignmentsForStudent(session.studentId, session.teacherId) as Promise<AssignmentWithTarget[]>,
     getStudentProfile(session.studentId, session.teacherId),
     getStudentVisibleNotices(session.studentId, session.teacherId) as Promise<Notice[]>,
-    getStudentCalendarEvents(session.studentId, session.teacherId, "2026-05-01", "2026-06-07") as Promise<StudentCalendarEvent[]>,
+    getStudentCalendarEvents(session.studentId, session.teacherId, calendarRange.start, calendarRange.end) as Promise<StudentCalendarEvent[]>,
     getStudentUpcomingTests(session.studentId, session.teacherId) as Promise<UpcomingTest[]>,
     getStudentTestResults(session.studentId, session.teacherId) as Promise<TestResult[]>,
   ]);
@@ -176,7 +247,6 @@ function StudentTeamHeader({
         <div>
           <div className="flex items-center gap-3">
             {classLogoUrl && <img src={classLogoUrl} alt={`${classNames[0] ?? "class"} logo`} className="h-[72px] w-[72px] rounded-md object-cover" />}
-            <span className="inline-flex w-fit rounded-full bg-white/18 px-4 py-2 text-sm font-bold text-[#dcfce7] ring-1 ring-white/25">{classNames[0] ?? "배정된 반 없음"}</span>
           </div>
           <h1 className="mt-5 max-w-2xl text-[clamp(2.2rem,7vw,4.2rem)] font-bold leading-[1.25] tracking-[-0.04em]">
             {studentName} 학생의 오늘 학습을 확인해요
@@ -205,7 +275,6 @@ function HeroMetric({ label, value }: { label: string; value: string }) {
 }
 
 function WeeklyHomeworkSection({ assignments }: { assignments: AssignmentWithTarget[] }) {
-  const weeklyAssignments = assignments.slice(0, 3);
   return (
     <section id="weekly-homework" className="student-section">
       <div className="mb-5 flex items-end justify-between gap-3">
@@ -215,13 +284,13 @@ function WeeklyHomeworkSection({ assignments }: { assignments: AssignmentWithTar
           <p className="mt-2 text-base leading-7 text-[#5b655d]">이번 주에 해야 할 숙제를 확인하고 제출해 주세요.</p>
         </div>
       </div>
-      {weeklyAssignments.length === 0 ? (
+      {assignments.length === 0 ? (
         <Card>
           <p className="text-sm text-slate-500">이번주 숙제가 없습니다.</p>
         </Card>
       ) : (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 lg:gap-4">
-          {weeklyAssignments.map((assignment) => (
+          {assignments.map((assignment) => (
             <HomeworkSubjectCard key={assignment.id} assignment={assignment} />
           ))}
         </div>
@@ -234,9 +303,10 @@ function HomeworkSubjectCard({ assignment }: { assignment: AssignmentWithTarget 
   const status = homeworkStatus(assignment);
   const item = assignment.items[0];
   const needsResubmit = assignment.targetStatus === "returned";
-  const hasSubmitted = Boolean(assignment.submittedAt);
+  const hasSubmitted = hasCurrentSubmission(assignment);
+  const hasDraft = Boolean(assignment.draft) && !hasSubmitted && !needsResubmit;
   const href = hasSubmitted && !needsResubmit ? `/student/assignments/${assignment.id}/complete` : `/student/assignments/${assignment.id}`;
-  const buttonLabel = needsResubmit ? "다시 제출하기" : hasSubmitted ? "제출 내용 보기" : "숙제하기";
+  const buttonLabel = needsResubmit ? "다시 제출하기" : hasSubmitted ? "제출 내용 보기" : hasDraft ? "숙제 이어하기" : "숙제하기";
   const passageTitle = item?.title && item.title !== assignment.title ? item.title : "";
 
   return (
@@ -244,7 +314,9 @@ function HomeworkSubjectCard({ assignment }: { assignment: AssignmentWithTarget 
       <div className="flex flex-col items-start gap-2 sm:flex-row sm:justify-between sm:gap-3">
         <div className="flex flex-wrap gap-2">
           <Badge tone="blue">{subjectForAssignment(assignment)}</Badge>
-          <Badge>{assignmentTypeLabel(assignment.assignmentType)}</Badge>
+          {assignmentTypeTags(assignment).map((label) => (
+            <Badge key={label}>{label}</Badge>
+          ))}
         </div>
         {assignment.dueAt && <Badge tone="yellow">마감 {formatDateTime(assignment.dueAt)}</Badge>}
       </div>
@@ -264,7 +336,7 @@ function HomeworkSubjectCard({ assignment }: { assignment: AssignmentWithTarget 
         {(status === "completed" || status === "returned") && assignment.teacherComment && (
           <p className="mt-2 text-sm leading-6 text-slate-700">선생님 메모: {assignment.teacherComment}</p>
         )}
-        {assignment.submittedAt && <p className="mt-2 text-xs font-semibold text-slate-500">제출 {formatDateTime(assignment.submittedAt)}</p>}
+        {hasSubmitted && <p className="mt-2 text-xs font-semibold text-slate-500">제출 {formatDateTime(assignment.submittedAt)}</p>}
       </div>
       <Button href={href} className="mt-4 min-h-10 w-full px-3 text-xs sm:min-h-12 sm:text-sm">
         {buttonLabel}

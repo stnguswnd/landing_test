@@ -10,7 +10,7 @@ export const navigation: Array<{ id: SectionId; label: string }> = [
 ];
 
 export const hero = {
-  eyebrow: "초등 영어 홈스쿨링",
+  eyebrow: "초등 영어 스튜디오",
   title: ["영어를 오래 잘하는 힘,", "초등부터 완성합니다."],
   description: "초등 2년안에 중고등학생의 영어수준까지!",
   strengths: [
@@ -197,8 +197,8 @@ export const contact = {
   label: "상담 문의",
   title: "상담 & 커리큘럼 안내",
   description: "",
-  name: "JANE",
-  phone: "01027601568",
+  name: "재인타임즈",
+  phone: "010-2760-1568",
   bank: "국민은행 216701-04-033600 예금주 곽재인",
   kakaoLabel: "카카오 문의",
 };

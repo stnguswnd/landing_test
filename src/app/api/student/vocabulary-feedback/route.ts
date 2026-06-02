@@ -1,11 +1,14 @@
+import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 
+import { postgresPool } from "@/lib/postgres";
 import { requireStudentSession } from "@/server/auth/studentSession";
 
 export const runtime = "nodejs";
 
 const requestHistory = new Map<string, number>();
 const RATE_LIMIT_MS = 2500;
+const MAX_FEEDBACK_ATTEMPTS = 3;
 
 function fallback(sentence: string, raw?: unknown) {
   return {
@@ -29,6 +32,63 @@ function normalize(value: unknown, sentence: string) {
   };
 }
 
+async function reserveFeedbackAttempt({
+  assignmentId,
+  vocabularyItemId,
+  studentId,
+}: {
+  assignmentId: string;
+  vocabularyItemId: string;
+  studentId: string;
+}) {
+  const client = await postgresPool.connect();
+  try {
+    await client.query("begin");
+    const result = await client.query<{ attempt_count: number }>(
+      `
+        select count(*)::int as attempt_count
+        from student_ai_feedback_attempts safa
+        where safa.assignment_id = $1
+          and safa.student_id = $2
+          and safa.assignment_vocabulary_item_id = $3
+          and safa.feedback_type = 'vocabulary_example'
+          and safa.created_at > coalesce(
+            (
+              select sub.submitted_at
+              from submissions sub
+              where sub.assignment_id = $1
+                and sub.student_id = $2
+              limit 1
+            ),
+            '-infinity'::timestamptz
+          )
+      `,
+      [assignmentId, studentId, vocabularyItemId],
+    );
+    const attemptCount = result.rows[0]?.attempt_count ?? 0;
+    if (attemptCount >= MAX_FEEDBACK_ATTEMPTS) {
+      await client.query("rollback");
+      return { ok: false };
+    }
+    await client.query(
+      `
+        insert into student_ai_feedback_attempts (
+          id, assignment_id, student_id, assignment_vocabulary_item_id, feedback_type
+        )
+        values ($1, $2, $3, $4, 'vocabulary_example')
+      `,
+      [`ai-feedback-attempt-${randomUUID()}`, assignmentId, studentId, vocabularyItemId],
+    );
+    await client.query("commit");
+    return { ok: true };
+  } catch (error) {
+    await client.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function POST(request: Request) {
   let session;
   try {
@@ -44,14 +104,27 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json().catch(() => ({}));
+  const assignmentId = String(body.assignmentId ?? "").trim();
+  const vocabularyItemId = String(body.assignmentVocabularyItemId ?? "").trim();
   const word = String(body.word ?? "").trim();
   const meaning = String(body.meaning ?? "").trim();
   const sentence = String(body.sentence ?? "").trim();
 
+  if (!assignmentId || !vocabularyItemId) return NextResponse.json({ error: "AI 첨삭 요청 정보가 부족합니다." }, { status: 400 });
   if (!sentence) return NextResponse.json({ error: "첨삭할 문장을 입력해주세요." }, { status: 400 });
   if (sentence.length > 500) return NextResponse.json({ error: "문장이 너무 깁니다. 500자 이하로 작성해주세요." }, { status: 400 });
 
   requestHistory.set(session.studentId, now);
+
+  try {
+    const attempt = await reserveFeedbackAttempt({ assignmentId, vocabularyItemId, studentId: session.studentId });
+    if (!attempt.ok) {
+      return NextResponse.json({ error: "AI 첨삭은 제출 1회당 최대 3번까지 받을 수 있습니다.", remainingAttempts: 0 }, { status: 429 });
+    }
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json({ error: "AI 첨삭 횟수를 확인하지 못했습니다." }, { status: 500 });
+  }
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return NextResponse.json(fallback(sentence));

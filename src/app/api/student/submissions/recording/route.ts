@@ -92,12 +92,14 @@ export async function POST(request: Request) {
           assignment_target_id = excluded.assignment_target_id,
           status = excluded.status,
           submitted_at = now(),
+          reviewed_at = null,
+          teacher_comment = null,
           updated_at = now()
       `,
       [submissionId, assignmentId, session.studentId, target.rows[0].target_id, submissionStatus],
     );
 
-    await client.query(
+    const submissionItem = await client.query<{ id: string }>(
       `
         insert into submission_items (
           id, submission_id, assignment_item_id, recording_storage_path, recording_url,
@@ -113,11 +115,40 @@ export async function POST(request: Request) {
           file_size_bytes = excluded.file_size_bytes,
           recording_duration_sec = excluded.recording_duration_sec,
           updated_at = now()
+        returning id
       `,
       [
         `submission-item-${randomUUID()}`,
         submissionId,
         assignmentItemId,
+        storagePath,
+        publicUrl,
+        fileName,
+        file.type || "audio/webm",
+        file.size,
+        Number.isFinite(durationSec) ? Math.round(durationSec) : null,
+      ],
+    );
+
+    const submissionItemId = submissionItem.rows[0].id;
+    await client.query(
+      "delete from submission_item_attachments where submission_item_id = $1 and attachment_type = 'audio'",
+      [submissionItemId],
+    );
+    await client.query(
+      `
+        insert into submission_item_attachments (
+          id, submission_item_id, submission_id, assignment_item_id, attachment_type,
+          storage_bucket, storage_path, file_url, file_name, mime_type, file_size_bytes, duration_sec, order_index
+        )
+        values ($1, $2, $3, $4, 'audio', $5, $6, $7, $8, $9, $10, $11, 0)
+      `,
+      [
+        `attachment-${randomUUID()}`,
+        submissionItemId,
+        submissionId,
+        assignmentItemId,
+        storageBuckets.audio,
         storagePath,
         publicUrl,
         fileName,

@@ -1486,6 +1486,9 @@ function NoticesTab({ classId, notices, onChanged }: { classId: string; notices:
                   </div>
                   <h3 className="mt-2 font-bold">{notice.title}</h3>
                   <p className="mt-1 text-sm text-slate-600">{notice.content}</p>
+                  {notice.imageUrl && (
+                    <img src={notice.imageUrl} alt="공지 이미지" className="mt-3 max-h-48 rounded-md border border-line object-contain" />
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <Button variant="secondary" onClick={() => { setEditing(notice); setIsOpen(true); }}>수정</Button>
@@ -1506,17 +1509,43 @@ function NoticesTab({ classId, notices, onChanged }: { classId: string; notices:
 function NoticeModal({ classId, notice, onClose, onSaved }: { classId: string; notice: Notice | null; onClose: () => void; onSaved: () => void }) {
   const [title, setTitle] = useState(notice?.title ?? "");
   const [content, setContent] = useState(notice?.content ?? "");
-  const [imageUrl, setImageUrl] = useState(notice?.imageUrl ?? "");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState(notice?.imageUrl ?? "");
   const [status, setStatus] = useState(notice?.status ?? "published");
+  const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
 
+  useEffect(() => {
+    return () => {
+      if (imagePreviewUrl.startsWith("blob:")) URL.revokeObjectURL(imagePreviewUrl);
+    };
+  }, [imagePreviewUrl]);
+
+  function selectImage(files: FileList | null) {
+    const file = files?.[0] ?? null;
+    if (imagePreviewUrl.startsWith("blob:")) URL.revokeObjectURL(imagePreviewUrl);
+    setImageFile(file);
+    setImagePreviewUrl(file ? URL.createObjectURL(file) : notice?.imageUrl ?? "");
+  }
+
   function save() {
+    setError("");
     startTransition(async () => {
-      await fetch(notice ? `/api/teacher/notices/${notice.id}` : `/api/teacher/classes/${classId}/notices`, {
+      const formData = new FormData();
+      formData.set("title", title);
+      formData.set("content", content);
+      formData.set("status", status);
+      formData.set("currentImageUrl", notice?.imageUrl ?? "");
+      if (imageFile) formData.set("imageFile", imageFile, imageFile.name);
+      const response = await fetch(notice ? `/api/teacher/notices/${notice.id}` : `/api/teacher/classes/${classId}/notices`, {
         method: notice ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, content, imageUrl: imageUrl || null, status }),
+        body: formData,
       });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(data.error ?? "공지 저장 중 오류가 발생했습니다.");
+        return;
+      }
       onSaved();
     });
   }
@@ -1524,9 +1553,16 @@ function NoticeModal({ classId, notice, onClose, onSaved }: { classId: string; n
   return (
     <Modal title={notice ? "반 공지 수정" : "반 공지 작성"} onClose={onClose}>
       <div className="grid gap-4">
+        {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{error}</p>}
         <label className="grid gap-2 text-sm font-semibold">제목<Input value={title} onChange={(event) => setTitle(event.target.value)} /></label>
         <label className="grid gap-2 text-sm font-semibold">본문<Textarea value={content} onChange={(event) => setContent(event.target.value)} /></label>
-        <label className="grid gap-2 text-sm font-semibold">이미지 URL<Input value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} /></label>
+        <label className="grid gap-2 text-sm font-semibold">
+          이미지 업로드
+          <Input type="file" accept="image/*" onChange={(event) => selectImage(event.target.files)} />
+          {imagePreviewUrl && (
+            <img src={imagePreviewUrl} alt="공지 이미지 미리보기" className="max-h-56 w-full rounded-md border border-line object-contain" />
+          )}
+        </label>
         <label className="grid gap-2 text-sm font-semibold">공개 상태<Select value={status} onChange={(event) => setStatus(event.target.value)}><option value="published">published</option><option value="draft">draft</option><option value="hidden">hidden</option></Select></label>
         <ModalActions onClose={onClose} onSave={save} isPending={isPending} />
       </div>

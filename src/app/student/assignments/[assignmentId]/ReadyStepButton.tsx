@@ -8,21 +8,25 @@ import { cn } from "@/lib/utils";
 type ReadyStepButtonProps = {
   children: ReactNode;
   disabled?: boolean;
+  disabledReason?: string;
   type?: "button" | "submit" | "reset";
   variant?: "primary" | "secondary" | "danger" | "ghost";
   className?: string;
   tooltip?: string;
   onClick?: () => void;
+  onDisabledClick?: (reason: string) => void;
 };
 
 export function ReadyStepButton({
   children,
   disabled = false,
+  disabledReason,
   type = "button",
   variant,
   className,
   tooltip = "준비됐어요. 다음 단계로 넘어갈 수 있어요.",
   onClick,
+  onDisabledClick,
 }: ReadyStepButtonProps) {
   const [showTooltip, setShowTooltip] = useState(false);
   const wasDisabledRef = useRef(disabled);
@@ -52,10 +56,18 @@ export function ReadyStepButton({
       <Button
         type={type}
         variant={variant}
-        disabled={disabled}
-        onClick={onClick}
+        disabled={disabled && !disabledReason}
+        aria-disabled={disabled}
+        onClick={() => {
+          if (disabled) {
+            if (disabledReason) onDisabledClick?.(disabledReason);
+            return;
+          }
+          onClick?.();
+        }}
         className={cn(
           "w-full",
+          disabled && disabledReason && "cursor-not-allowed opacity-50",
           !disabled && "ring-2 ring-action/45 ring-offset-2 ring-offset-white shadow-soft",
           showTooltip && "animate-pulse",
           className,

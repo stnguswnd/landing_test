@@ -8,7 +8,9 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Textarea } from "@/components/ui/Textarea";
 import type { Assignment } from "@/types/assignment";
+import type { PartMode } from "./partMode";
 import { ReadyStepButton } from "./ReadyStepButton";
+import { SubmissionAlertModal } from "./SubmissionAlertModal";
 
 type WordState = {
   originalAnswerText: string;
@@ -18,6 +20,7 @@ type WordState = {
   aiFeedbackRaw?: unknown;
   revisedAnswerText: string;
   reviewed: boolean;
+  aiFeedbackAttempts: number;
 };
 
 function formatDateTime(value?: string | null) {
@@ -25,13 +28,15 @@ function formatDateTime(value?: string | null) {
   return new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }
 
-export function VocabularyExampleHomework({ assignment }: { assignment: Assignment }) {
+export function VocabularyExampleHomework({ assignment, partMode, draftData }: { assignment: Assignment; partMode?: PartMode; draftData?: Record<string, unknown> }) {
   const router = useRouter();
   const item = assignment.items[0];
   const vocabularyItems = assignment.vocabularyItems ?? [];
   const submittedByWord = new Map((assignment.submissionVocabularyItems ?? []).map((answer) => [answer.assignmentVocabularyItemId, answer]));
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const draftStates = draftData?.states as Record<string, WordState> | undefined;
+  const [currentIndex, setCurrentIndex] = useState(typeof draftData?.currentIndex === "number" ? draftData.currentIndex : 0);
   const [states, setStates] = useState<Record<string, WordState>>(() => {
+    if (draftStates) return draftStates;
     const initial: Record<string, WordState> = {};
     for (const word of vocabularyItems) {
       const submitted = submittedByWord.get(word.id);
@@ -43,11 +48,13 @@ export function VocabularyExampleHomework({ assignment }: { assignment: Assignme
         aiFeedbackRaw: submitted?.aiFeedbackRaw,
         revisedAnswerText: submitted?.revisedAnswerText ?? "",
         reviewed: Boolean(submitted?.aiCorrectedText),
+        aiFeedbackAttempts: 0,
       };
     }
     return initial;
   });
   const [message, setMessage] = useState("");
+  const [alertMessage, setAlertMessage] = useState("");
   const [isSubmitOpen, setIsSubmitOpen] = useState(false);
   const [pending, startTransition] = useTransition();
 
@@ -55,9 +62,18 @@ export function VocabularyExampleHomework({ assignment }: { assignment: Assignme
   const currentState = currentWord ? states[currentWord.id] : undefined;
   const allReady = vocabularyItems.length > 0 && vocabularyItems.every((word) => states[word.id]?.reviewed && states[word.id]?.revisedAnswerText.trim());
   const isLast = currentIndex === vocabularyItems.length - 1;
+  const canRequestFeedback = Boolean(currentState?.originalAnswerText.trim()) && (currentState?.aiFeedbackAttempts ?? 0) < 3 && !pending;
 
   const instruction = item?.passageText || "Write a sentence using a given vocabulary.";
   const progressText = useMemo(() => `${Math.min(currentIndex + 1, vocabularyItems.length)} / ${vocabularyItems.length}`, [currentIndex, vocabularyItems.length]);
+  const currentDisabledReason = !currentState?.originalAnswerText.trim()
+    ? "문장을 먼저 작성해주세요."
+    : !currentState?.reviewed
+      ? "AI 첨삭을 먼저 받은 뒤 다음으로 넘어갈 수 있습니다."
+      : !currentState?.revisedAnswerText.trim()
+        ? "첨삭을 보고 다시 쓰기를 작성해주세요."
+        : undefined;
+  const submitDisabledReason = !allReady ? "모든 단어의 AI 첨삭과 다시 쓰기를 완료해주세요." : undefined;
 
   function updateCurrent(patch: Partial<WordState>) {
     if (!currentWord) return;
@@ -65,16 +81,20 @@ export function VocabularyExampleHomework({ assignment }: { assignment: Assignme
   }
 
   function requestFeedback() {
-    if (!currentWord || !currentState?.originalAnswerText.trim()) return;
+    if (!currentWord || !canRequestFeedback) return;
+    const activeState = currentState;
+    if (!activeState) return;
     setMessage("");
     startTransition(async () => {
       const response = await fetch("/api/student/vocabulary-feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          assignmentId: assignment.id,
+          assignmentVocabularyItemId: currentWord.id,
           word: currentWord.word,
           meaning: currentWord.meaning,
-          sentence: currentState.originalAnswerText,
+          sentence: activeState.originalAnswerText,
         }),
       });
       const data = await response.json().catch(() => ({}));
@@ -83,12 +103,13 @@ export function VocabularyExampleHomework({ assignment }: { assignment: Assignme
         return;
       }
       updateCurrent({
-        aiCorrectedText: data.correctedText ?? currentState.originalAnswerText,
+        aiCorrectedText: data.correctedText ?? activeState.originalAnswerText,
         aiFeedback: data.feedback ?? "",
         aiGrammarNotes: data.grammarNotes ?? "",
         aiFeedbackRaw: data.raw,
         revisedAnswerText: data.correctedText ?? "",
         reviewed: true,
+        aiFeedbackAttempts: Math.min((activeState.aiFeedbackAttempts ?? 0) + 1, 3),
       });
     });
   }
@@ -117,6 +138,11 @@ export function VocabularyExampleHomework({ assignment }: { assignment: Assignme
       }
       router.push(`/student/assignments/${assignment.id}/complete`);
     });
+  }
+
+  function savePart() {
+    if (!partMode || !allReady) return;
+    partMode.onSave({ data: { states, currentIndex } });
   }
 
   if (!currentWord || !currentState) {
@@ -188,25 +214,39 @@ export function VocabularyExampleHomework({ assignment }: { assignment: Assignme
           </div>
         )}
 
-        {message && <p className="mt-3 text-sm font-semibold text-danger">{message}</p>}
+        <p className="mt-4 text-sm font-semibold text-slate-500">AI 첨삭 가능 횟수: {Math.max(3 - (currentState.aiFeedbackAttempts ?? 0), 0)} / 3</p>
         <div className="mt-5 grid gap-3 md:grid-cols-3">
           <Button type="button" variant="secondary" disabled={currentIndex === 0 || pending} onClick={() => setCurrentIndex((value) => Math.max(value - 1, 0))}>
             전 단어
           </Button>
-          <Button type="button" variant="secondary" disabled={!currentState.originalAnswerText.trim() || currentState.reviewed || pending} onClick={requestFeedback}>
-            {pending ? "첨삭 중..." : currentState.reviewed ? "1회 첨삭 완료" : "AI 첨삭받기"}
+          <Button type="button" variant="secondary" disabled={!canRequestFeedback} onClick={requestFeedback}>
+            {pending ? "첨삭 중..." : currentState.aiFeedbackAttempts >= 3 ? "첨삭 3회 완료" : currentState.reviewed ? "AI 첨삭 다시 받기" : "AI 첨삭받기"}
           </Button>
           {isLast ? (
-            <ReadyStepButton disabled={!allReady || pending} onClick={() => setIsSubmitOpen(true)} tooltip="모든 단어 연습이 끝났어요. 제출할 수 있어요.">제출하기</ReadyStepButton>
+            <ReadyStepButton
+              disabled={!allReady || pending}
+              disabledReason={submitDisabledReason}
+              onDisabledClick={setAlertMessage}
+              onClick={partMode ? savePart : () => setIsSubmitOpen(true)}
+              tooltip={partMode ? partMode.tooltip ?? "모든 단어 연습이 끝났어요. 저장할 수 있어요." : "모든 단어 연습이 끝났어요. 제출할 수 있어요."}
+            >
+              {partMode ? partMode.label ?? "저장하기" : "제출하기"}
+            </ReadyStepButton>
           ) : (
-            <ReadyStepButton disabled={!currentState.reviewed || !currentState.revisedAnswerText.trim()} onClick={() => setCurrentIndex((value) => Math.min(value + 1, vocabularyItems.length - 1))} tooltip="첨삭 확인과 다시 쓰기가 끝났어요. 다음 단어로 넘어갈 수 있어요.">
+            <ReadyStepButton
+              disabled={!currentState.reviewed || !currentState.revisedAnswerText.trim()}
+              disabledReason={currentDisabledReason}
+              onDisabledClick={setAlertMessage}
+              onClick={() => setCurrentIndex((value) => Math.min(value + 1, vocabularyItems.length - 1))}
+              tooltip="첨삭 확인과 다시 쓰기가 끝났어요. 다음 단어로 넘어갈 수 있어요."
+            >
               다음 단어
             </ReadyStepButton>
           )}
         </div>
       </Card>
 
-      {isSubmitOpen && (
+      {!partMode && isSubmitOpen && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/35 p-4" role="dialog" aria-modal="true">
           <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-soft">
             <h2 className="text-xl font-extrabold">제출하시겠습니까?</h2>
@@ -217,6 +257,9 @@ export function VocabularyExampleHomework({ assignment }: { assignment: Assignme
             </div>
           </div>
         </div>
+      )}
+      {(message || alertMessage) && (
+        <SubmissionAlertModal message={message || alertMessage} onClose={() => { setMessage(""); setAlertMessage(""); }} />
       )}
     </div>
   );

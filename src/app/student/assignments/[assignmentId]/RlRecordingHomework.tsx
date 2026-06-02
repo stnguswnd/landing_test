@@ -10,8 +10,11 @@ import { Card } from "@/components/ui/Card";
 import { submitRecording } from "@/features/submissions/api/submissionApi";
 import { useAudioRecorder } from "@/hooks/useAudioRecorder";
 import { formatDateTime, formatDue } from "@/lib/format";
-import type { Assignment } from "@/types/assignment";
+import type { Assignment, StudentAssignmentDraftAttachment } from "@/types/assignment";
+import type { PartMode } from "./partMode";
 import { ReadyStepButton } from "./ReadyStepButton";
+import { RecordingStatusBar } from "./RecordingStatusBar";
+import { SubmissionAlertModal } from "./SubmissionAlertModal";
 
 type RlHomeworkStep = 1 | 2;
 
@@ -26,7 +29,7 @@ function Header({ assignment }: { assignment: Assignment }) {
     <Card className="shadow-soft">
       <div className="flex flex-wrap gap-2">
         <Badge tone="blue">{assignment.classId || "내 반"}</Badge>
-        <Badge tone="green">RL 녹음</Badge>
+        <Badge tone="green">듣고녹음하기</Badge>
         {assignment.dueAt && <Badge tone="yellow">마감: {formatDue(assignment.dueAt)}</Badge>}
         {assignment.submittedAt && <Badge tone="green">제출: {formatDateTime(assignment.submittedAt)}</Badge>}
       </div>
@@ -56,7 +59,7 @@ function Content({ assignment }: { assignment: Assignment }) {
   );
 }
 
-export function RlRecordingHomework({ assignment }: { assignment: Assignment }) {
+export function RlRecordingHomework({ assignment, partMode, draftAttachments = [] }: { assignment: Assignment; partMode?: PartMode; draftAttachments?: StudentAssignmentDraftAttachment[] }) {
   const router = useRouter();
   const item = assignment.items[0];
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -66,16 +69,24 @@ export function RlRecordingHomework({ assignment }: { assignment: Assignment }) 
   const [hasListenedFullAudio, setHasListenedFullAudio] = useState(false);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [error, setError] = useState("");
+  const [alertMessage, setAlertMessage] = useState("");
   const [pending, startTransition] = useTransition();
 
   const minRecordingSec = item?.minRecordingSec ?? 0;
+  const draftAudio = draftAttachments.find((attachment) => attachment.attachmentType === "audio");
+  const isRecorderBusy = recorder.state === "recording" || recorder.state === "requesting_permission";
   const canSubmit = Boolean(recorder.recordingBlob) && recorder.durationSec >= minRecordingSec && !pending;
+  const submitDisabledReason = !recorder.recordingBlob
+    ? "녹음을 완료한 뒤 제출할 수 있습니다."
+    : recorder.durationSec < minRecordingSec
+      ? `녹음 시간이 부족합니다. 최소 ${formatSeconds(minRecordingSec)} 이상 녹음해주세요.`
+      : undefined;
 
   function goStep(nextStep: RlHomeworkStep) {
     if (nextStep === 2 && !hasListenedFullAudio) return;
     audioRef.current?.pause();
     recordedAudioRef.current?.pause();
-    if (recorder.state === "recording") recorder.stopRecording();
+    if (recorder.state === "recording") stopRecording();
     setStep(nextStep);
   }
 
@@ -86,11 +97,20 @@ export function RlRecordingHomework({ assignment }: { assignment: Assignment }) 
     await recorder.startRecording();
   }
 
+  function stopRecording() {
+    audioRef.current?.pause();
+    recorder.stopRecording();
+  }
+
   function playOriginalAudio() {
     if (recorder.state === "recording") recorder.stopRecording();
     recordedAudioRef.current?.pause();
     setStep(1);
-    window.setTimeout(() => audioRef.current?.play().catch(() => undefined), 0);
+    window.setTimeout(() => {
+      if (!audioRef.current) return;
+      audioRef.current.volume = 1;
+      audioRef.current.play().catch(() => undefined);
+    }, 0);
   }
 
   function confirmSubmit() {
@@ -112,6 +132,18 @@ export function RlRecordingHomework({ assignment }: { assignment: Assignment }) 
         setError(err instanceof Error ? err.message : "녹음 제출 중 오류가 발생했습니다.");
         setSubmitOpen(false);
       }
+    });
+  }
+
+  function savePart() {
+    const recordingBlob = recorder.recordingBlob;
+    if (!partMode || !recordingBlob || !canSubmit) return;
+    partMode.onSave({
+      data: { durationSec: recorder.durationSec, hasListenedFullAudio },
+      files: [recordingBlob],
+      attachmentType: "audio",
+      replaceAttachments: true,
+      durationSec: recorder.durationSec,
     });
   }
 
@@ -150,11 +182,15 @@ export function RlRecordingHomework({ assignment }: { assignment: Assignment }) 
         ) : (
           <>
             <h2 className="font-bold">내 녹음</h2>
-            <div className="mt-4 rounded-lg border border-line p-4">
-              <p className="font-semibold">녹음 상태: {recorder.state === "recording" ? "녹음 중" : recorder.previewUrl ? "녹음 완료" : "대기 중"}</p>
-              <p className="mt-1 text-sm text-slate-500">녹음 시간: {formatSeconds(recorder.durationSec)} / 최소 {formatSeconds(minRecordingSec)}</p>
+            <div className="mt-4">
+              <RecordingStatusBar
+                seconds={recorder.durationSec}
+                minSeconds={minRecordingSec}
+                isRecording={recorder.state === "recording"}
+                formatSeconds={formatSeconds}
+              />
+              {recorder.previewUrl && recorder.state !== "recording" && <p className="mt-2 text-sm font-semibold text-action">녹음 완료</p>}
               {recorder.errorMessage && <p className="mt-3 text-sm font-semibold text-danger">마이크 권한이 필요합니다.</p>}
-              {error && <p className="mt-3 text-sm font-semibold text-danger">{error}</p>}
             </div>
             {recorder.previewUrl && (
               <div className="mt-4">
@@ -162,9 +198,15 @@ export function RlRecordingHomework({ assignment }: { assignment: Assignment }) 
                 <AudioPlayer ref={recordedAudioRef} src={recorder.previewUrl} preload="metadata" onPlay={() => audioRef.current?.pause()} />
               </div>
             )}
+            {draftAudio?.fileUrl && !recorder.previewUrl && (
+              <div className="mt-4">
+                <p className="mb-2 text-sm font-bold text-slate-600">임시저장 녹음</p>
+                <AudioPlayer src={draftAudio.fileUrl} preload="metadata" />
+              </div>
+            )}
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               {recorder.state === "recording" ? (
-                <Button type="button" variant="danger" onClick={recorder.stopRecording}>녹음 완료</Button>
+                <Button type="button" variant="danger" onClick={stopRecording}>녹음 완료</Button>
               ) : (
                 <Button type="button" onClick={startRecording}>{recorder.previewUrl ? "다시 녹음하기" : "녹음 시작"}</Button>
               )}
@@ -174,11 +216,26 @@ export function RlRecordingHomework({ assignment }: { assignment: Assignment }) 
         )}
       </Card>
       <div className="grid gap-3 sm:grid-cols-3">
-        <Button type="button" variant={step === 1 ? "primary" : "secondary"} className={step === 1 ? "hover:bg-action" : undefined} onClick={playOriginalAudio}>듣고 연습하기</Button>
+        <Button
+          type="button"
+          variant={step === 1 ? "primary" : "secondary"}
+          className={step === 1 ? "hover:bg-action" : undefined}
+          onClick={playOriginalAudio}
+        >
+          듣고 연습하기
+        </Button>
         <ReadyStepButton variant={step === 2 ? "primary" : "secondary"} className={step === 2 ? "cursor-default hover:bg-action" : undefined} disabled={!hasListenedFullAudio} onClick={() => goStep(2)} tooltip="음원을 끝까지 들었어요. 이제 녹음 단계로 넘어갈 수 있어요.">녹음하기</ReadyStepButton>
-        <ReadyStepButton disabled={!canSubmit} onClick={() => setSubmitOpen(true)} tooltip="녹음이 완료됐어요. 제출하기를 누를 수 있어요.">제출하기</ReadyStepButton>
+        <ReadyStepButton
+          disabled={!canSubmit}
+          disabledReason={submitDisabledReason}
+          onDisabledClick={setAlertMessage}
+          onClick={partMode ? savePart : () => setSubmitOpen(true)}
+          tooltip={partMode ? partMode.tooltip ?? "녹음이 완료됐어요. 저장할 수 있어요." : "녹음이 완료됐어요. 제출하기를 누를 수 있어요."}
+        >
+          {partMode ? partMode.label ?? "저장하기" : "제출하기"}
+        </ReadyStepButton>
       </div>
-      {submitOpen && (
+      {!partMode && submitOpen && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/35 p-4" role="dialog" aria-modal="true">
           <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-soft">
             <h2 className="text-xl font-extrabold">제출하시겠습니까?</h2>
@@ -189,6 +246,9 @@ export function RlRecordingHomework({ assignment }: { assignment: Assignment }) 
             </div>
           </div>
         </div>
+      )}
+      {(error || alertMessage) && (
+        <SubmissionAlertModal message={error || alertMessage} onClose={() => { setError(""); setAlertMessage(""); }} />
       )}
     </div>
   );

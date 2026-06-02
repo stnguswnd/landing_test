@@ -10,7 +10,9 @@ import { Textarea } from "@/components/ui/Textarea";
 import { requestWritingFeedback, submitWritingAssignment, type WritingFeedbackResult } from "@/features/submissions/api/submissionApi";
 import { formatDateTime, formatDue } from "@/lib/format";
 import type { Assignment } from "@/types/assignment";
+import type { PartMode } from "./partMode";
 import { ReadyStepButton } from "./ReadyStepButton";
+import { SubmissionAlertModal } from "./SubmissionAlertModal";
 
 function writingInstruction(item: Assignment["items"][number]) {
   const unit = item.writingUnit === "sentences" ? "sentences" : "paragraphs";
@@ -24,14 +26,15 @@ function writingInstruction(item: Assignment["items"][number]) {
     : "Write a 4 paragraph essay about below.";
 }
 
-export function WritingHomework({ assignment }: { assignment: Assignment }) {
+export function WritingHomework({ assignment, partMode, draftData }: { assignment: Assignment; partMode?: PartMode; draftData?: Record<string, unknown> }) {
   const router = useRouter();
   const item = assignment.items[0];
-  const [answerText, setAnswerText] = useState(item?.answerText ?? "");
-  const [revisedText, setRevisedText] = useState("");
+  const draftAiResult = draftData?.aiResult as WritingFeedbackResult | undefined;
+  const [answerText, setAnswerText] = useState(typeof draftData?.answerText === "string" ? draftData.answerText : item?.answerText ?? "");
+  const [revisedText, setRevisedText] = useState(typeof draftData?.revisedText === "string" ? draftData.revisedText : "");
   const revisedTextRef = useRef<HTMLTextAreaElement | null>(null);
   const [aiResult, setAiResult] = useState<WritingFeedbackResult | null>(
-    item?.aiCorrectedText
+    draftAiResult ?? (item?.aiCorrectedText
       ? {
           correctedText: item.aiCorrectedText,
           feedback: item.aiFeedback ?? "",
@@ -39,16 +42,23 @@ export function WritingHomework({ assignment }: { assignment: Assignment }) {
           expressionNotes: item.aiExpressionNotes ? [item.aiExpressionNotes] : [],
           raw: item.aiFeedbackRaw,
         }
-      : null,
+      : null),
   );
-  const [hasReceivedAiFeedback, setHasReceivedAiFeedback] = useState(Boolean(item?.aiCorrectedText));
+  const [hasReceivedAiFeedback, setHasReceivedAiFeedback] = useState(Boolean(draftData?.hasReceivedAiFeedback) || Boolean(draftAiResult) || Boolean(item?.aiCorrectedText));
+  const [aiFeedbackAttempts, setAiFeedbackAttempts] = useState(typeof draftData?.aiFeedbackAttempts === "number" ? draftData.aiFeedbackAttempts : 0);
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
   const [error, setError] = useState("");
+  const [alertMessage, setAlertMessage] = useState("");
   const [pending, startTransition] = useTransition();
 
-  const canRequestAiFeedback = answerText.trim().length > 0 && !pending;
+  const canRequestAiFeedback = answerText.trim().length > 0 && aiFeedbackAttempts < 3 && !pending;
   const canSubmit = hasReceivedAiFeedback && revisedText.trim().length > 0 && aiResult !== null && !pending;
+  const submitDisabledReason = !hasReceivedAiFeedback || !aiResult
+    ? "AI 첨삭을 먼저 받은 뒤 제출할 수 있습니다."
+    : !revisedText.trim()
+      ? "AI 첨삭을 보고 다시 쓰는 글을 작성해주세요."
+      : undefined;
   const promptText = item?.promptText || item?.passageText || "";
 
   function requestFeedback() {
@@ -71,6 +81,7 @@ export function WritingHomework({ assignment }: { assignment: Assignment }) {
           answerText,
         });
         setAiResult(result);
+        setAiFeedbackAttempts((value) => Math.min(value + 1, 3));
         setHasReceivedAiFeedback(true);
         setRevisedText("");
         window.setTimeout(() => revisedTextRef.current?.focus(), 0);
@@ -111,6 +122,19 @@ export function WritingHomework({ assignment }: { assignment: Assignment }) {
       } catch (err) {
         setError(err instanceof Error ? err.message : "라이팅 제출 중 오류가 발생했습니다.");
       }
+    });
+  }
+
+  function savePart() {
+    if (!partMode || !aiResult || !canSubmit) return;
+    partMode.onSave({
+      data: {
+        answerText,
+        revisedText,
+        aiResult,
+        hasReceivedAiFeedback,
+        aiFeedbackAttempts,
+      },
     });
   }
 
@@ -218,13 +242,20 @@ export function WritingHomework({ assignment }: { assignment: Assignment }) {
           </div>
         )}
 
-        {error && <p className="mt-3 text-sm font-semibold text-danger">{error}</p>}
+        <p className="mt-4 text-sm font-semibold text-slate-500">AI 첨삭 가능 횟수: {Math.max(3 - aiFeedbackAttempts, 0)} / 3</p>
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
           <Button type="button" variant="secondary" disabled={!canRequestAiFeedback} onClick={requestFeedback} className="min-h-12 text-base">
-            {hasReceivedAiFeedback ? "AI 첨삭 다시 받기" : "AI 첨삭받기"}
+            {aiFeedbackAttempts >= 3 ? "첨삭 3회 완료" : hasReceivedAiFeedback ? "AI 첨삭 다시 받기" : "AI 첨삭받기"}
           </Button>
-          <ReadyStepButton disabled={!canSubmit} onClick={() => setIsSubmitModalOpen(true)} className="min-h-12 text-base" tooltip="수정본 작성이 끝났어요. 제출할 수 있어요.">
-            제출하기
+          <ReadyStepButton
+            disabled={!canSubmit}
+            disabledReason={submitDisabledReason}
+            onDisabledClick={setAlertMessage}
+            onClick={partMode ? savePart : () => setIsSubmitModalOpen(true)}
+            className="min-h-12 text-base"
+            tooltip={partMode ? partMode.tooltip ?? "수정본 작성이 끝났어요. 저장할 수 있어요." : "수정본 작성이 끝났어요. 제출할 수 있어요."}
+          >
+            {partMode ? partMode.label ?? "저장하기" : "제출하기"}
           </ReadyStepButton>
         </div>
       </Card>
@@ -239,18 +270,20 @@ export function WritingHomework({ assignment }: { assignment: Assignment }) {
         </div>
       )}
 
-      {isSubmitModalOpen && (
+      {!partMode && isSubmitModalOpen && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/35 p-4" role="dialog" aria-modal="true">
           <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-soft">
             <h2 className="text-xl font-extrabold">제출하시겠습니까?</h2>
             <p className="mt-3 leading-7 text-slate-600">제출하면 선생님이 확인해보고 완료, 미완료를 알려줄거에요.</p>
-            {error && <p className="mt-3 text-sm font-semibold text-danger">{error}</p>}
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               <Button type="button" variant="secondary" onClick={() => setIsSubmitModalOpen(false)} disabled={pending}>아니요</Button>
               <Button type="button" onClick={confirmSubmit} disabled={pending}>{pending ? "제출 중..." : "네"}</Button>
             </div>
           </div>
         </div>
+      )}
+      {(error || alertMessage) && (
+        <SubmissionAlertModal message={error || alertMessage} onClose={() => { setError(""); setAlertMessage(""); }} />
       )}
     </div>
   );

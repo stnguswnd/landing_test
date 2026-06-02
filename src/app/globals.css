@@ -1161,7 +1161,7 @@ img {
   }
 
   .footer {
-    padding: 18px 0 0;
+    padding: 18px 0 calc(96px + env(safe-area-inset-bottom));
   }
 
   .footer__inner {

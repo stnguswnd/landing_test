@@ -40,6 +40,7 @@ export function SubmissionReviewPanel({ detail }: { detail: SubmissionDetail }) 
   const [pendingStatus, setPendingStatus] = useState<ReviewStatus | null>(null);
   const [isPending, startTransition] = useTransition();
   const assignmentType = normalizeAssignmentType(detail.assignment?.assignmentType);
+  const hasPartItems = detail.items.some((item) => item.assignmentPartId);
 
   function review(nextStatus: ReviewStatus) {
     if (isPending) return;
@@ -91,11 +92,18 @@ export function SubmissionReviewPanel({ detail }: { detail: SubmissionDetail }) 
         </div>
       </Card>
 
-      {assignmentType === "listening_recording" && <RecordingReview items={detail.items} />}
-      {assignmentType === "listening" && <ListeningReview submittedAt={detail.submittedAt} />}
-      {assignmentType === "writing" && <WritingReview items={detail.items} />}
-      {assignmentType === "vocabulary_example" && <VocabularyExampleReview vocabularyItems={detail.vocabularyItems ?? []} />}
-      {assignmentType === "vocabulary_recording" && <VocabularyRecordingReview items={detail.items} vocabularyItems={detail.vocabularyItems ?? []} />}
+      {hasPartItems ? (
+        <MultiPartReview items={detail.items} vocabularyItems={detail.vocabularyItems ?? []} />
+      ) : (
+        <>
+          {assignmentType === "listening_recording" && <RecordingReview items={detail.items} />}
+          {assignmentType === "listening" && <ListeningReview submittedAt={detail.submittedAt} />}
+          {assignmentType === "writing" && <WritingReview items={detail.items} />}
+          {assignmentType === "vocabulary_example" && <VocabularyExampleReview vocabularyItems={detail.vocabularyItems ?? []} />}
+          {assignmentType === "vocabulary_recording" && <VocabularyRecordingReview items={detail.items} vocabularyItems={detail.vocabularyItems ?? []} />}
+          {assignmentType === "photo_submission" && <PhotoSubmissionReview items={detail.items} />}
+        </>
+      )}
 
       <Card>
         <h3 className="text-lg font-bold">선생님 최종 피드백</h3>
@@ -137,6 +145,166 @@ export function SubmissionReviewPanel({ detail }: { detail: SubmissionDetail }) 
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function partTypeLabel(type?: string) {
+  if (type === "listening") return "리스닝";
+  if (type === "recording") return "녹음 제출";
+  if (type === "writing") return "라이팅";
+  if (type === "photo_submission") return "사진 제출";
+  if (type === "quiz") return "퀴즈";
+  if (type === "vocabulary_example") return "단어 예문";
+  if (type === "vocabulary_recording") return "단어 녹음";
+  return "Part";
+}
+
+function MultiPartReview({ items, vocabularyItems }: { items: SubmissionDetail["items"]; vocabularyItems: NonNullable<SubmissionDetail["vocabularyItems"]> }) {
+  return (
+    <div className="grid gap-4">
+      {items.map((item, index) => {
+        const images = (item.attachments ?? []).filter((attachment) => attachment.attachmentType === "image");
+        const audios = (item.attachments ?? []).filter((attachment) => attachment.attachmentType === "audio");
+        const states = item.answerText && item.partType === "vocabulary_example" ? tryParseVocabularyStates(item.answerText) : null;
+        return (
+          <Card key={`${item.assignmentPartId ?? item.assignmentItemId}-${index}`}>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone="blue">Part {index + 1}</Badge>
+              <Badge tone="green">{partTypeLabel(item.partType)}</Badge>
+            </div>
+            <h3 className="mt-3 text-lg font-bold">{item.title ?? `Part ${index + 1}`}</h3>
+            {item.partType === "quiz" && <QuizAnswersReview answers={item.quizAnswers ?? []} />}
+            {item.passageText && <p className="mt-4 whitespace-pre-wrap rounded-md bg-paper p-4 text-lg leading-8">{item.passageText}</p>}
+
+            {images.length > 0 && (
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {images.map((image) => (
+                  <a key={image.id} href={image.fileUrl} target="_blank" rel="noreferrer" className="overflow-hidden rounded-lg border border-line bg-slate-50">
+                    <img src={image.fileUrl} alt={image.fileName ?? "제출 사진"} className="aspect-[4/3] w-full object-cover" />
+                    <p className="truncate px-3 py-2 text-xs font-semibold text-slate-600">{image.fileName ?? "-"}</p>
+                  </a>
+                ))}
+              </div>
+            )}
+
+            {(item.recordingUrl || audios.length > 0) && (
+              <div className="mt-4 grid gap-3">
+                {item.recordingUrl && (
+                  <div>
+                    <p className="mb-2 text-sm font-semibold">학생 녹음 파일</p>
+                    <AudioPlayer src={item.recordingUrl} />
+                  </div>
+                )}
+                {audios.map((audio) => (
+                  <div key={audio.id}>
+                    <p className="mb-2 text-sm font-semibold">{audio.fileName ?? "오디오 파일"}</p>
+                    {audio.fileUrl && <AudioPlayer src={audio.fileUrl} />}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {(item.originalAnswerText || item.answerText || item.aiCorrectedText) && !states && (
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                {item.originalAnswerText && <TextBlock title="처음 작성한 내용" value={item.originalAnswerText} />}
+                {item.aiCorrectedText && <TextBlock title="AI 첨삭문" value={item.aiCorrectedText} tone="blue" />}
+                {item.answerText && <TextBlock title="제출 내용" value={item.answerText} tone="green" />}
+              </div>
+            )}
+
+            {states && <VocabularyStatesReview states={states} vocabularyItems={vocabularyItems} />}
+
+            {item.aiFeedback && (
+              <div className="mt-4 rounded-md bg-paper p-4">
+                <p className="font-bold">AI 피드백</p>
+                <p className="mt-2 whitespace-pre-wrap leading-7">{item.aiFeedback}</p>
+                {item.aiGrammarNotes && <p className="mt-3 whitespace-pre-wrap text-sm leading-6"><strong>문법 교정사항</strong><br />{item.aiGrammarNotes}</p>}
+              </div>
+            )}
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+function QuizAnswersReview({ answers }: { answers: NonNullable<SubmissionDetail["items"][number]["quizAnswers"]> }) {
+  const correctCount = answers.filter((answer) => answer.is_correct).length;
+  return (
+    <div className="mt-4 grid gap-3">
+      <div className="rounded-md bg-green-50 p-3 text-sm font-extrabold text-green-700">
+        퀴즈 결과: {correctCount} / {answers.length} 정답
+      </div>
+      {answers.map((answer, index) => (
+        <article key={answer.id} className="rounded-lg border border-line p-4">
+          <div className="flex flex-wrap gap-2">
+            <Badge tone="blue">Q{index + 1}</Badge>
+            <Badge tone={answer.is_correct ? "green" : "yellow"}>{answer.is_correct ? "정답" : "오답"}</Badge>
+          </div>
+          <p className="mt-3 font-bold">{answer.question_text}</p>
+          <div className="mt-3 grid gap-2 text-sm font-semibold text-slate-700">
+            <p>학생 답: {answer.selected_choice_text ? `${answer.selected_choice_label}. ${answer.selected_choice_text}` : "-"}</p>
+            {!answer.is_correct && <p>정답: {answer.correct_choice_text ? `${answer.correct_choice_label}. ${answer.correct_choice_text}` : "-"}</p>}
+            {!answer.is_correct && answer.incorrect_reason && <p className="rounded-md bg-red-50 p-3 text-red-700">이유: {answer.incorrect_reason}</p>}
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+type VocabularyState = {
+  originalAnswerText?: string;
+  aiCorrectedText?: string;
+  aiFeedback?: string;
+  aiGrammarNotes?: string;
+  revisedAnswerText?: string;
+};
+
+function tryParseVocabularyStates(value: string) {
+  try {
+    const parsed = JSON.parse(value) as Record<string, VocabularyState>;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function VocabularyStatesReview({
+  states,
+  vocabularyItems,
+}: {
+  states: Record<string, VocabularyState>;
+  vocabularyItems: NonNullable<SubmissionDetail["vocabularyItems"]>;
+}) {
+  const vocabularyById = new Map(vocabularyItems.map((item) => [item.id, item]));
+  return (
+    <div className="mt-4 grid gap-3">
+      {Object.entries(states).map(([wordId, state], index) => {
+        const word = vocabularyById.get(wordId);
+        return (
+          <article key={wordId} className="rounded-lg border border-line p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge>{index + 1}</Badge>
+              <p className="text-lg font-extrabold">{word?.word ?? wordId}</p>
+              {word?.meaning && <p className="text-slate-500">{word.meaning}</p>}
+            </div>
+            <div className="mt-4 grid gap-3 lg:grid-cols-3">
+              <TextBlock title="처음 쓴 문장" value={state.originalAnswerText} />
+              <TextBlock title="AI 첨삭문" value={state.aiCorrectedText} tone="blue" />
+              <TextBlock title="다시 쓴 글" value={state.revisedAnswerText} tone="green" />
+            </div>
+            {(state.aiFeedback || state.aiGrammarNotes) && (
+              <div className="mt-3 rounded-md bg-paper p-3">
+                <p className="font-bold">AI 피드백</p>
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-6">{state.aiFeedback ?? "-"}</p>
+                {state.aiGrammarNotes && <p className="mt-2 whitespace-pre-wrap text-sm leading-6"><strong>문법 교정사항</strong><br />{state.aiGrammarNotes}</p>}
+              </div>
+            )}
+          </article>
+        );
+      })}
     </div>
   );
 }
@@ -235,6 +403,34 @@ function ListeningReview({ submittedAt }: { submittedAt?: string }) {
       </p>
       <p className="mt-3 text-sm text-slate-600">완료 일시: {formatDateTime(submittedAt)}</p>
     </Card>
+  );
+}
+
+function PhotoSubmissionReview({ items }: { items: SubmissionDetail["items"] }) {
+  return (
+    <div className="grid gap-4">
+      {items.map((item) => {
+        const images = (item.attachments ?? []).filter((attachment) => attachment.attachmentType === "image");
+        return (
+          <Card key={item.assignmentItemId}>
+            <h3 className="text-lg font-bold">{item.title ?? "사진 제출"}</h3>
+            {item.passageText && <p className="mt-4 whitespace-pre-wrap rounded-md bg-paper p-4 text-lg leading-8">{item.passageText}</p>}
+            {images.length > 0 ? (
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {images.map((image) => (
+                  <a key={image.id} href={image.fileUrl} target="_blank" rel="noreferrer" className="overflow-hidden rounded-lg border border-line bg-slate-50">
+                    <img src={image.fileUrl} alt={image.fileName ?? "제출 사진"} className="aspect-[4/3] w-full object-cover" />
+                    <p className="truncate px-3 py-2 text-xs font-semibold text-slate-600">{image.fileName ?? "-"}</p>
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-4 rounded-md bg-yellow-50 p-3 text-sm font-semibold text-yellow-800">제출 사진을 아직 불러오지 못했습니다.</p>
+            )}
+          </Card>
+        );
+      })}
+    </div>
   );
 }
 

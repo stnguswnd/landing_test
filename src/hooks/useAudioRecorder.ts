@@ -33,7 +33,7 @@ export function useAudioRecorder() {
     if (typeof MediaRecorder === "undefined") {
       setErrorMessage("이 브라우저는 녹음을 지원하지 않습니다.");
       setState("error");
-      return;
+      return false;
     }
     try {
       setState("requesting_permission");
@@ -62,9 +62,11 @@ export function useAudioRecorder() {
       recorder.start();
       setState("recording");
       timerRef.current = window.setInterval(() => setDurationSec((value) => value + 1), 1000);
+      return true;
     } catch {
       setErrorMessage("마이크 권한을 확인해 주세요.");
       setState("error");
+      return false;
     }
   }
 
