@@ -147,7 +147,16 @@ export async function GET(_request: Request, { params }: Params) {
         at.student_id,
         coalesce(at.submitted_at, at.due_at, a.due_at, a.created_at)::date as date,
         a.title as assignment_title,
-        a.assignment_type,
+        coalesce(
+          case
+            when part_summary.part_count = 1 then
+              case part_summary.part_type
+                when 'recording' then 'listening_recording'
+                else part_summary.part_type
+              end
+          end,
+          a.assignment_type
+        ) as assignment_type,
         c.name as class_name,
         case
           when sub.id is not null then 'submitted'
@@ -167,10 +176,16 @@ export async function GET(_request: Request, { params }: Params) {
       left join submissions sub on sub.assignment_id = a.id and sub.student_id = at.student_id
       left join teacher_feedback tf on tf.submission_id = sub.id
       left join classes c on c.id = coalesce(at.class_id, a.class_id) and c.teacher_id = a.teacher_id and c.status = 'active'
+      left join lateral (
+        select count(*)::int as part_count, min(ap.part_type) as part_type
+        from assignment_parts ap
+        where ap.assignment_id = a.id
+          and ap.status = 'active'
+      ) part_summary on true
       where at.student_id = $1
         and at.status <> 'cancelled'
         and (coalesce(at.class_id, a.class_id) is null or c.id is not null)
-      group by at.assignment_id, at.id, at.student_id, at.submitted_at, at.due_at, a.due_at, a.created_at, a.title, a.assignment_type, c.name, sub.id, sub.status, at.reviewed, tf.id, tf.score
+      group by at.assignment_id, at.id, at.student_id, at.submitted_at, at.due_at, a.due_at, a.created_at, a.title, a.assignment_type, part_summary.part_count, part_summary.part_type, c.name, sub.id, sub.status, at.reviewed, tf.id, tf.score
       order by date desc, a.title
     `,
     [studentId, teacherId],

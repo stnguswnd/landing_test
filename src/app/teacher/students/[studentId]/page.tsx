@@ -128,7 +128,16 @@ async function getLearningHistory(teacherId: string, studentId: string) {
         at.student_id,
         coalesce(at.submitted_at, at.due_at, a.due_at, a.created_at)::date as date,
         a.title as assignment_title,
-        a.assignment_type,
+        coalesce(
+          case
+            when part_summary.part_count = 1 then
+              case part_summary.part_type
+                when 'recording' then 'listening_recording'
+                else part_summary.part_type
+              end
+          end,
+          a.assignment_type
+        ) as assignment_type,
         c.name as class_name,
         case
           when sub.id is not null then 'submitted'
@@ -148,6 +157,12 @@ async function getLearningHistory(teacherId: string, studentId: string) {
       left join submissions sub on sub.assignment_id = a.id and sub.student_id = at.student_id
       left join teacher_feedback tf on tf.submission_id = sub.id
       left join classes c on c.id = coalesce(at.class_id, a.class_id) and c.teacher_id = a.teacher_id and c.status = 'active'
+      left join lateral (
+        select count(*)::int as part_count, min(ap.part_type) as part_type
+        from assignment_parts ap
+        where ap.assignment_id = a.id
+          and ap.status = 'active'
+      ) part_summary on true
       where at.student_id = $1
         and at.status <> 'cancelled'
         and (coalesce(at.class_id, a.class_id) is null or c.id is not null)
@@ -161,6 +176,8 @@ async function getLearningHistory(teacherId: string, studentId: string) {
         a.created_at,
         a.title,
         a.assignment_type,
+        part_summary.part_count,
+        part_summary.part_type,
         c.name,
         sub.id,
         sub.status,
