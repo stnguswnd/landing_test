@@ -15,14 +15,25 @@ export function BackNavigationGuard({ fallbackHref }: BackNavigationGuardProps) 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-    const currentState = window.history.state && typeof window.history.state === "object" ? window.history.state : {};
+    function currentUrl() {
+      return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    }
 
-    window.history.replaceState({ ...currentState, [GUARD_STATE_KEY]: "anchor" }, "", currentUrl);
-    window.history.pushState({ [GUARD_STATE_KEY]: "trap" }, "", currentUrl);
+    function historyState() {
+      return window.history.state && typeof window.history.state === "object" ? window.history.state : {};
+    }
+
+    function armGuard() {
+      const state = historyState();
+      const url = currentUrl();
+      window.history.replaceState({ ...state, [GUARD_STATE_KEY]: "anchor" }, "", url);
+      window.history.pushState({ ...state, [GUARD_STATE_KEY]: "trap" }, "", url);
+    }
+
+    armGuard();
 
     function handlePopState() {
-      window.history.replaceState({ [GUARD_STATE_KEY]: "redirect" }, "", fallbackHref);
+      window.history.pushState({ ...historyState(), [GUARD_STATE_KEY]: "trap" }, "", currentUrl());
       window.location.replace(fallbackHref);
     }
 

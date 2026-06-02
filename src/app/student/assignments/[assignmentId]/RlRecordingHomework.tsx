@@ -202,9 +202,6 @@ export function RlRecordingHomework({ assignment, partMode, draftAttachments = [
               <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-4">
                 <AudioPlayer ref={audioRef} className="hidden" src={item.audioUrl} preload="auto" onEnded={() => setHasListenedFullAudio(true)} />
                 <p className="text-sm font-bold text-action">원본 MP3를 들으면서 바로 녹음할 수 있습니다.</p>
-                <Button type="button" className="mt-3 w-full" onClick={playOriginalAndStartRecording} disabled={isRecorderBusy}>
-                  원본 MP3 재생 + 녹음 시작
-                </Button>
               </div>
             )}
             <div className="mt-4">
@@ -233,7 +230,9 @@ export function RlRecordingHomework({ assignment, partMode, draftAttachments = [
               {recorder.state === "recording" ? (
                 <Button type="button" variant="danger" onClick={stopRecording}>녹음 완료</Button>
               ) : (
-                <Button type="button" onClick={startRecording}>{recorder.previewUrl ? "다시 녹음하기" : "녹음 시작"}</Button>
+                <Button type="button" onClick={item?.audioUrl ? playOriginalAndStartRecording : startRecording}>
+                  {recorder.previewUrl ? "다시 녹음하기" : item?.audioUrl ? "재생 + 녹음 시작" : "녹음 시작"}
+                </Button>
               )}
               <Button type="button" variant="secondary" onClick={recorder.resetRecording} disabled={!recorder.previewUrl}>초기화하기</Button>
             </div>
@@ -245,10 +244,9 @@ export function RlRecordingHomework({ assignment, partMode, draftAttachments = [
           type="button"
           variant={step === 1 ? "primary" : "secondary"}
           className={step === 1 ? "hover:bg-action" : undefined}
-          onClick={step === 2 ? playOriginalAndStartRecording : playOriginalAudio}
-          disabled={step === 2 && isRecorderBusy}
+          onClick={playOriginalAudio}
         >
-          {step === 2 ? "원본 MP3 + 녹음 시작" : "듣고 연습하기"}
+          듣고 연습하기
         </Button>
         <ReadyStepButton variant={step === 2 ? "primary" : "secondary"} className={step === 2 ? "cursor-default hover:bg-action" : undefined} disabled={!hasListenedFullAudio} onClick={() => goStep(2)} tooltip="음원을 끝까지 들었어요. 이제 녹음 단계로 넘어갈 수 있어요.">녹음하기</ReadyStepButton>
         <ReadyStepButton

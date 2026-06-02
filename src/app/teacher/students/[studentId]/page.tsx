@@ -34,6 +34,7 @@ type HistoryRow = {
   date: string | Date;
   assignment_title: string;
   assignment_type: StudentLearningHistory["assignmentType"];
+  assignment_types: StudentLearningHistory["assignmentType"][] | null;
   class_name: string | null;
   submit_status: StudentLearningHistory["submitStatus"];
   score: number | null;
@@ -78,6 +79,7 @@ function mapHistory(row: HistoryRow): StudentLearningHistory {
     date: toDate(row.date),
     assignmentTitle: row.assignment_title,
     assignmentType: row.assignment_type,
+    assignmentTypes: row.assignment_types ?? [row.assignment_type],
     className: row.class_name ?? undefined,
     submitStatus: row.submit_status,
     score: row.score,
@@ -131,13 +133,11 @@ async function getLearningHistory(teacherId: string, studentId: string) {
         coalesce(
           case
             when part_summary.part_count = 1 then
-              case part_summary.part_type
-                when 'recording' then 'listening_recording'
-                else part_summary.part_type
-              end
+              part_summary.assignment_types[1]
           end,
           a.assignment_type
         ) as assignment_type,
+        coalesce(part_summary.assignment_types, array[a.assignment_type]) as assignment_types,
         c.name as class_name,
         case
           when sub.id is not null then 'submitted'
@@ -158,10 +158,24 @@ async function getLearningHistory(teacherId: string, studentId: string) {
       left join teacher_feedback tf on tf.submission_id = sub.id
       left join classes c on c.id = coalesce(at.class_id, a.class_id) and c.teacher_id = a.teacher_id and c.status = 'active'
       left join lateral (
-        select count(*)::int as part_count, min(ap.part_type) as part_type
-        from assignment_parts ap
-        where ap.assignment_id = a.id
-          and ap.status = 'active'
+        select count(*)::int as part_count, array_agg(part_types.assignment_type order by part_types.first_order) as assignment_types
+        from (
+          select
+            case ap.part_type
+              when 'recording' then 'listening_recording'
+              else ap.part_type
+            end as assignment_type,
+            min(ap.order_index) as first_order
+          from assignment_parts ap
+          where ap.assignment_id = a.id
+            and ap.status = 'active'
+            and ap.part_type <> 'instruction'
+          group by
+            case ap.part_type
+              when 'recording' then 'listening_recording'
+              else ap.part_type
+            end
+        ) part_types
       ) part_summary on true
       where at.student_id = $1
         and at.status <> 'cancelled'
@@ -177,7 +191,7 @@ async function getLearningHistory(teacherId: string, studentId: string) {
         a.title,
         a.assignment_type,
         part_summary.part_count,
-        part_summary.part_type,
+        part_summary.assignment_types,
         c.name,
         sub.id,
         sub.status,
@@ -195,6 +209,17 @@ async function getLearningHistory(teacherId: string, studentId: string) {
 
 function assignmentTypeLabel(type: string) {
   return formatAssignmentTypeLabel(type);
+}
+
+function AssignmentTypeBadges({ item }: { item: StudentLearningHistory }) {
+  const types = item.assignmentTypes?.length ? item.assignmentTypes : [item.assignmentType];
+  return (
+    <div className="flex flex-wrap gap-1">
+      {types.map((type) => (
+        <Badge key={type}>{assignmentTypeLabel(type)}</Badge>
+      ))}
+    </div>
+  );
 }
 
 function submitStatusLabel(status: StudentLearningHistory["submitStatus"]) {
@@ -282,7 +307,7 @@ export default async function StudentLearningHistoryPage({
                     <p className="truncate font-bold">{item.assignmentTitle}</p>
                     <p className="mt-1 text-sm text-slate-500">{item.className ?? "-"}</p>
                   </div>
-                  <Badge>{assignmentTypeLabel(item.assignmentType)}</Badge>
+                  <AssignmentTypeBadges item={item} />
                   <Badge tone={submitTone(item.submitStatus)}>{submitStatusLabel(item.submitStatus)}</Badge>
                   <Badge tone={reviewTone(item.reviewStatus)}>{reviewStatusLabel(item.reviewStatus)}</Badge>
                   {item.detailHref ? (

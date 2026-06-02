@@ -17,6 +17,7 @@ type HistoryRow = {
   date: string | Date;
   assignment_title: string;
   assignment_type: string;
+  assignment_types: string[] | null;
   class_name: string | null;
   submit_status: "submitted" | "not_submitted" | "late";
   score: number | null;
@@ -150,13 +151,11 @@ export async function GET(_request: Request, { params }: Params) {
         coalesce(
           case
             when part_summary.part_count = 1 then
-              case part_summary.part_type
-                when 'recording' then 'listening_recording'
-                else part_summary.part_type
-              end
+              part_summary.assignment_types[1]
           end,
           a.assignment_type
         ) as assignment_type,
+        coalesce(part_summary.assignment_types, array[a.assignment_type]) as assignment_types,
         c.name as class_name,
         case
           when sub.id is not null then 'submitted'
@@ -177,15 +176,29 @@ export async function GET(_request: Request, { params }: Params) {
       left join teacher_feedback tf on tf.submission_id = sub.id
       left join classes c on c.id = coalesce(at.class_id, a.class_id) and c.teacher_id = a.teacher_id and c.status = 'active'
       left join lateral (
-        select count(*)::int as part_count, min(ap.part_type) as part_type
-        from assignment_parts ap
-        where ap.assignment_id = a.id
-          and ap.status = 'active'
+        select count(*)::int as part_count, array_agg(part_types.assignment_type order by part_types.first_order) as assignment_types
+        from (
+          select
+            case ap.part_type
+              when 'recording' then 'listening_recording'
+              else ap.part_type
+            end as assignment_type,
+            min(ap.order_index) as first_order
+          from assignment_parts ap
+          where ap.assignment_id = a.id
+            and ap.status = 'active'
+            and ap.part_type <> 'instruction'
+          group by
+            case ap.part_type
+              when 'recording' then 'listening_recording'
+              else ap.part_type
+            end
+        ) part_types
       ) part_summary on true
       where at.student_id = $1
         and at.status <> 'cancelled'
         and (coalesce(at.class_id, a.class_id) is null or c.id is not null)
-      group by at.assignment_id, at.id, at.student_id, at.submitted_at, at.due_at, a.due_at, a.created_at, a.title, a.assignment_type, part_summary.part_count, part_summary.part_type, c.name, sub.id, sub.status, at.reviewed, tf.id, tf.score
+      group by at.assignment_id, at.id, at.student_id, at.submitted_at, at.due_at, a.due_at, a.created_at, a.title, a.assignment_type, part_summary.part_count, part_summary.assignment_types, c.name, sub.id, sub.status, at.reviewed, tf.id, tf.score
       order by date desc, a.title
     `,
     [studentId, teacherId],
@@ -198,6 +211,7 @@ export async function GET(_request: Request, { params }: Params) {
     date: toDate(row.date),
     assignmentTitle: row.assignment_title,
     assignmentType: row.assignment_type,
+    assignmentTypes: row.assignment_types ?? [row.assignment_type],
     className: row.class_name ?? undefined,
     submitStatus: row.submit_status,
     score: row.score,

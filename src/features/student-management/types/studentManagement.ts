@@ -1,4 +1,5 @@
 export type StudentStatus = "active" | "inactive";
+export type StudentLearningHistoryAssignmentType = "listening_recording" | "listening" | "writing" | "vocabulary_example" | "vocabulary_recording" | "photo_submission" | "quiz";
 
 export type ManagedStudent = {
   id: string;
@@ -24,7 +25,8 @@ export type StudentLearningHistory = {
   studentId: string;
   date: string;
   assignmentTitle: string;
-  assignmentType: "listening_recording" | "listening" | "writing" | "vocabulary_example" | "vocabulary_recording" | "photo_submission" | "quiz";
+  assignmentType: StudentLearningHistoryAssignmentType;
+  assignmentTypes?: StudentLearningHistoryAssignmentType[];
   className?: string;
   submitStatus: "submitted" | "not_submitted" | "late";
   score?: number | null;

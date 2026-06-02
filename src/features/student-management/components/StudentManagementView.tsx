@@ -550,7 +550,7 @@ function LearningTab({ history, onDelete }: { history: StudentLearningHistory[];
             <td className="py-3">{item.date}</td>
             <td className="font-semibold">{item.assignmentTitle}</td>
             <td>{item.className ?? "-"}</td>
-            <td>{assignmentTypeLabel(item.assignmentType)}</td>
+            <td><AssignmentTypeBadges item={item} /></td>
             <td><Badge tone={item.submitStatus === "submitted" ? "green" : item.submitStatus === "late" ? "yellow" : "red"}>{submitStatusLabel(item.submitStatus)}</Badge></td>
             <td>{reviewStatusLabel(item.reviewStatus)}</td>
             <td>{item.detailHref ? <Button href={item.detailHref} variant="secondary">상세</Button> : <Button disabled variant="secondary">상세</Button>}</td>
@@ -692,6 +692,17 @@ function ConfirmModal({ title, message, onCancel, onConfirm }: { title: string; 
 
 function assignmentTypeLabel(type: string) {
   return formatAssignmentTypeLabel(type);
+}
+
+function AssignmentTypeBadges({ item }: { item: StudentLearningHistory }) {
+  const types = item.assignmentTypes?.length ? item.assignmentTypes : [item.assignmentType];
+  return (
+    <div className="flex flex-wrap gap-1">
+      {types.map((type) => (
+        <Badge key={type}>{assignmentTypeLabel(type)}</Badge>
+      ))}
+    </div>
+  );
 }
 
 function submitStatusLabel(status: StudentLearningHistory["submitStatus"]) {
