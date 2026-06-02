@@ -540,7 +540,8 @@ export async function getStudentCalendarEvents(studentId: string, teacherId: str
     `
       select
         at.assignment_id,
-        coalesce(at.due_at, a.due_at)::date as date,
+        (coalesce(at.due_at, a.due_at) at time zone 'Asia/Seoul')::date as date,
+        to_char(coalesce(at.due_at, a.due_at) at time zone 'Asia/Seoul', 'HH24:MI') as due_time,
         a.title,
         cs.name as subject_name,
         coalesce(at.status, 'assigned') as target_status,
@@ -556,9 +557,9 @@ export async function getStudentCalendarEvents(studentId: string, teacherId: str
           coalesce(at.class_id, a.class_id) is null
           or c.status = 'active'
         )
-        and coalesce(at.due_at, a.due_at)::date between $3::date and $4::date
+        and (coalesce(at.due_at, a.due_at) at time zone 'Asia/Seoul')::date between $3::date and $4::date
         and at.status <> 'cancelled'
-      order by coalesce(at.due_at, a.due_at)::date asc, c.name asc nulls last, a.title asc
+      order by (coalesce(at.due_at, a.due_at) at time zone 'Asia/Seoul')::date asc, due_time asc, c.name asc nulls last, a.title asc
     `,
     [studentId, teacherId, start, end],
   );
@@ -624,6 +625,8 @@ export async function getStudentCalendarEvents(studentId: string, teacherId: str
       className: row.class_name,
       subject: row.subject_name,
       status: row.target_status,
+      startTime: row.due_time,
+      endTime: null,
     })),
     ...events.rows.map((row) => ({
       id: row.id,
@@ -651,7 +654,13 @@ export async function getStudentCalendarEvents(studentId: string, teacherId: str
       description: row.scope,
       status: row.status,
     })),
-  ].sort((a, b) => a.date.localeCompare(b.date));
+  ].sort((a, b) => {
+    const dateOrder = a.date.localeCompare(b.date);
+    if (dateOrder !== 0) return dateOrder;
+    const timeOrder = (a.startTime ?? "99:99").localeCompare(b.startTime ?? "99:99");
+    if (timeOrder !== 0) return timeOrder;
+    return a.title.localeCompare(b.title);
+  });
 }
 
 export async function getStudentUpcomingTests(studentId: string, teacherId: string) {

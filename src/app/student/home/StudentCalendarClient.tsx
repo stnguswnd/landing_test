@@ -126,6 +126,24 @@ function assignmentStatusTone(status?: string): "green" | "yellow" | "red" | "gr
   return "gray";
 }
 
+function eventTimeText(event: StudentCalendarEvent) {
+  const fallback = event.type === "assignment" || event.type === "assignment_due" ? "마감 시간 미정" : "시간 미정";
+  const timeRange = formatTimeRange(event.startTime, event.endTime, fallback);
+
+  if (event.type === "assignment" || event.type === "assignment_due") return `마감 ${timeRange}`;
+  if (event.type === "test") return `시험 시간 ${timeRange}`;
+  if (event.type === "cancelled" || event.type === "cancelled_class") return `휴강 시간 ${timeRange}`;
+  if (event.type === "makeup" || event.type === "makeup_class") return `보강 시간 ${timeRange}`;
+  if (event.type === "class") return `수업 시간 ${timeRange}`;
+  return timeRange;
+}
+
+function compareEventsByTime(left: StudentCalendarEvent, right: StudentCalendarEvent) {
+  const timeOrder = (left.startTime ?? "99:99").localeCompare(right.startTime ?? "99:99");
+  if (timeOrder !== 0) return timeOrder;
+  return left.title.localeCompare(right.title);
+}
+
 export function StudentCalendarClient({ events }: { events: StudentCalendarEvent[] }) {
   const today = todayDate();
   const [selectedDate, setSelectedDate] = useState(today);
@@ -136,6 +154,9 @@ export function StudentCalendarClient({ events }: { events: StudentCalendarEvent
     for (const event of events) {
       const key = event.date.slice(0, 10);
       grouped.set(key, [...(grouped.get(key) ?? []), event]);
+    }
+    for (const [key, dayEvents] of grouped) {
+      grouped.set(key, [...dayEvents].sort(compareEventsByTime));
     }
     return grouped;
   }, [events]);
@@ -250,7 +271,6 @@ export function StudentCalendarClient({ events }: { events: StudentCalendarEvent
           ) : (
             <div className="mt-3 grid gap-2">
               {selectedEvents.map((event) => {
-                const timeRange = formatTimeRange(event.startTime, event.endTime, "");
                 return (
                   <article key={event.id} className="rounded-[18px] border border-line bg-[#f7fbf6] px-3 py-2">
                     <div className="flex flex-wrap items-center gap-2">
@@ -258,7 +278,7 @@ export function StudentCalendarClient({ events }: { events: StudentCalendarEvent
                       {event.className && <span className="text-xs font-semibold text-slate-500">{event.className}</span>}
                     </div>
                     <p className="mt-2 text-sm font-bold text-ink">{event.title}</p>
-                    {event.type === "test" && <p className="mt-1 text-xs font-semibold text-slate-500">{timeRange || "시간 미정"}</p>}
+                    <p className="mt-1 text-xs font-semibold text-slate-500">{eventTimeText(event)}</p>
                     {event.description && (
                       <p className="mt-2 rounded-[12px] bg-white px-3 py-2 text-xs font-semibold leading-5 text-[#5b655d]">
                         {event.description}
