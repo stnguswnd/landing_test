@@ -153,6 +153,11 @@ function calendarMarkerClass(type: StudentCalendarEvent["type"]) {
   return "bg-slate-100 text-slate-600";
 }
 
+function calendarMarkerLabel(type: StudentCalendarEvent["type"]) {
+  if (type === "class") return "수업";
+  return eventLabel(type);
+}
+
 export function StudentCalendarClient({ events }: { events: StudentCalendarEvent[] }) {
   const today = todayDate();
   const [selectedDate, setSelectedDate] = useState(today);
@@ -259,7 +264,7 @@ export function StudentCalendarClient({ events }: { events: StudentCalendarEvent
                             calendarMarkerClass(event.type),
                           )}
                         >
-                          {eventLabel(event.type)}
+                          {calendarMarkerLabel(event.type)}
                         </span>
                       ))}
                     </div>
