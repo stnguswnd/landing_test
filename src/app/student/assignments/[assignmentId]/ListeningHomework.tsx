@@ -88,7 +88,7 @@ export function ListeningHomework({ assignment, partMode }: { assignment: Assign
       <Header assignment={assignment} />
       <Card>
         <p className="text-sm font-bold text-action">1 / 1 듣기</p>
-        <h2 className="mt-2 text-lg font-bold">Listen and Repeat</h2>
+        <h2 className="mt-2 text-lg font-bold">Listen and Chant</h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">원본 MP3를 끝까지 들으면 {partMode ? "저장할" : "완료할"} 수 있습니다.</p>
       </Card>
       <Content assignment={assignment} />
