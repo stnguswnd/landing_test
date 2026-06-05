@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { saveAssignmentDraft, submitAssignmentDraft } from "@/features/assignments/api/assignmentDraftApi";
-import { normalizeAssignmentType } from "@/lib/assignmentTypes";
+import { assignmentTypeFromPartType } from "@/features/assignments/assignmentType";
+import { itemTypeForAssignmentType } from "@/lib/assignmentTypes";
 import type { Assignment } from "@/types/assignment";
 import { ListeningHomework } from "./ListeningHomework";
 import type { PartSavePayload } from "./partMode";
@@ -33,27 +34,7 @@ function partTypeLabel(type: AssignmentPart["partType"]) {
   return "단어 녹음 숙제";
 }
 
-function assignmentTypeForPart(part: AssignmentPart): Assignment["assignmentType"] {
-  if (part.partType === "photo_submission") return "photo_submission";
-  if (part.partType === "quiz") return "quiz";
-  if (part.partType === "listening") return "listening";
-  if (part.partType === "writing") return "writing";
-  if (part.partType === "vocabulary_example") return "vocabulary_example";
-  if (part.partType === "vocabulary_recording") return "vocabulary_recording";
-  return "listening_recording";
-}
-
-function itemTypeForPart(part: AssignmentPart) {
-  if (part.partType === "photo_submission") return "photo_submission";
-  if (part.partType === "quiz") return "quiz_prompt";
-  if (part.partType === "listening") return "listening";
-  if (part.partType === "writing") return "writing_prompt";
-  if (part.partType === "vocabulary_example") return "vocabulary_example";
-  if (part.partType === "vocabulary_recording") return "vocabulary_recording";
-  return "listening_recording";
-}
-
-function assignmentForPart(assignment: Assignment, part: AssignmentPart): Assignment {
+function assignmentForPart(assignment: Assignment, part: AssignmentPart, assignmentType: Assignment["assignmentType"]): Assignment {
   const image = (part.attachments ?? []).find((attachment) => attachment.attachmentType === "image");
   const audio = (part.attachments ?? []).find((attachment) => attachment.attachmentType === "audio");
   const baseItem = assignment.items[0];
@@ -61,14 +42,14 @@ function assignmentForPart(assignment: Assignment, part: AssignmentPart): Assign
 
   return {
     ...assignment,
-    assignmentType: assignmentTypeForPart(part),
+    assignmentType,
     title: part.title || assignment.title,
     description: part.instruction || assignment.description,
     imageUrl: image?.fileUrl ?? assignment.imageUrl,
     items: baseItem
       ? [{
           ...baseItem,
-          itemType: itemTypeForPart(part),
+          itemType: itemTypeForAssignmentType(assignmentType),
           title: part.title || baseItem.title,
           passageText: part.scriptText || baseItem.passageText,
           audioUrl: audio?.fileUrl || baseItem.audioUrl,
@@ -110,11 +91,14 @@ function HomeworkByPart({
   label?: string;
   tooltip?: string;
 }) {
-  const effectiveAssignment = assignmentForPart(assignment, part);
-  const assignmentType = normalizeAssignmentType(effectiveAssignment.assignmentType);
+  const assignmentType = assignmentTypeFromPartType(part.partType);
   const partMode = onSavePart ? { onSave: onSavePart, label, tooltip } : undefined;
   const draftData = (assignment.draft?.draftData?.[part.id] ?? undefined) as Record<string, unknown> | undefined;
   const draftAttachments = (assignment.draft?.attachments ?? []).filter((attachment) => attachment.assignmentPartId === part.id);
+
+  if (!assignmentType) return <PartContent part={part} />;
+
+  const effectiveAssignment = assignmentForPart(assignment, part, assignmentType);
 
   if (assignmentType === "photo_submission") {
     return (
@@ -200,7 +184,8 @@ export function MultiPartHomework({ assignment }: { assignment: Assignment }) {
 
   async function persistCurrentPart(payload?: PartSavePayload) {
     if (!currentPart) return;
-    const effectiveAssignment = assignmentForPart(assignment, currentPart);
+    const assignmentType = assignmentTypeFromPartType(currentPart.partType);
+    const effectiveAssignment = assignmentType ? assignmentForPart(assignment, currentPart, assignmentType) : assignment;
     const assignmentItemId = effectiveAssignment.items[0]?.id;
     await saveAssignmentDraft({
       assignmentId: assignment.id,

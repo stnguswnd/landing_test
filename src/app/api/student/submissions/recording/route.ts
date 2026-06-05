@@ -12,6 +12,8 @@ type TargetRow = {
   target_id: string;
   assignment_id: string;
   assignment_item_id: string;
+  assignment_type: string;
+  item_type: string;
   submission_id: string | null;
   due_at: Date | null;
 };
@@ -47,6 +49,8 @@ export async function POST(request: Request) {
           at.id as target_id,
           at.assignment_id,
           ai.id as assignment_item_id,
+          a.assignment_type,
+          ai.item_type,
           sub.id as submission_id,
           coalesce(at.due_at, a.due_at) as due_at
         from assignment_targets at
@@ -63,8 +67,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "배정되지 않은 과제입니다." }, { status: 403 });
     }
 
-    const submissionId = target.rows[0].submission_id ?? `submission-${randomUUID()}`;
-    const targetStatus = target.rows[0].due_at && target.rows[0].due_at.getTime() < Date.now() ? "late" : "submitted";
+    const targetRow = target.rows[0];
+    const isRecordingAssignment = targetRow.assignment_type === "listening_recording" || targetRow.assignment_type === "vocabulary_recording";
+    const isRecordingItem = targetRow.item_type === "listening_recording" || targetRow.item_type === "vocabulary_recording";
+
+    if (!isRecordingAssignment || !isRecordingItem) {
+      return NextResponse.json({ error: "녹음 제출 과제가 아닙니다." }, { status: 400 });
+    }
+
+    const submissionId = targetRow.submission_id ?? `submission-${randomUUID()}`;
+    const targetStatus = targetRow.due_at && targetRow.due_at.getTime() < Date.now() ? "late" : "submitted";
     const submissionStatus = "submitted";
     const fileName = safeFileName(file.name);
     const storagePath = `submissions/${submissionId}/${assignmentItemId}/${fileName}`;
@@ -96,7 +108,7 @@ export async function POST(request: Request) {
           teacher_comment = null,
           updated_at = now()
       `,
-      [submissionId, assignmentId, session.studentId, target.rows[0].target_id, submissionStatus],
+      [submissionId, assignmentId, session.studentId, targetRow.target_id, submissionStatus],
     );
 
     const submissionItem = await client.query<{ id: string }>(
@@ -160,7 +172,7 @@ export async function POST(request: Request) {
 
     await client.query(
       "update assignment_targets set status = $2, submitted_at = now(), reviewed = false, updated_at = now() where id = $1",
-      [target.rows[0].target_id, targetStatus],
+      [targetRow.target_id, targetStatus],
     );
 
     await client.query("commit");

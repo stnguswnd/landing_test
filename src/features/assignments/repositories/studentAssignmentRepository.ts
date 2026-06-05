@@ -867,6 +867,10 @@ export const studentAssignmentRepository = {
         where at.student_id = $1
           and at.status <> 'cancelled'
           and (
+            coalesce(at.due_at, a.due_at) is null
+            or coalesce(at.due_at, a.due_at) >= now()
+          )
+          and (
             coalesce(at.class_id, a.class_id) is null
             or exists (
               select 1

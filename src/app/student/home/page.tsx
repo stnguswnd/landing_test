@@ -4,10 +4,11 @@ import { StudentLayout } from "@/components/layout/StudentLayout";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { assignmentTypeFromPartType, getActiveAssignmentParts, getCanonicalAssignmentType, isMultipartAssignment } from "@/features/assignments/assignmentType";
 import { studentAssignmentRepository } from "@/features/assignments/repositories/studentAssignmentRepository";
 import { getStudentCalendarEvents, getStudentTestResults, getStudentUpcomingTests, getStudentVisibleNotices } from "@/lib/dashboardData";
 import { formatTimeRange } from "@/lib/calendarTypes";
-import { assignmentTypeLabel as formatAssignmentTypeLabel, normalizeAssignmentType, type AssignmentType } from "@/lib/assignmentTypes";
+import { assignmentTypeLabel as formatAssignmentTypeLabel } from "@/lib/assignmentTypes";
 import { query } from "@/lib/postgres";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { storageBuckets } from "@/lib/supabase/storage";
@@ -63,34 +64,14 @@ function assignmentTypeLabel(type: string) {
 }
 
 function assignmentTypeTags(assignment: AssignmentWithTarget) {
-  const activeParts = (assignment.parts ?? []).filter((part) => part.status === "active");
-  if (activeParts.length === 0) return [assignmentTypeLabel(effectiveAssignmentType(assignment))];
+  const activeParts = getActiveAssignmentParts(assignment.parts);
+  if (!isMultipartAssignment(assignment)) return [assignmentTypeLabel(getCanonicalAssignmentType(assignment))];
 
-  const labels = activeParts.map((part) => assignmentTypeLabel(part.partType));
+  const labels = activeParts
+    .map((part) => assignmentTypeFromPartType(part.partType))
+    .filter((type): type is NonNullable<typeof type> => Boolean(type))
+    .map((type) => assignmentTypeLabel(type));
   return Array.from(new Set(labels));
-}
-
-function effectiveAssignmentType(assignment: AssignmentWithTarget): AssignmentType {
-  const activeContentParts = (assignment.parts ?? []).filter((part) => part.status === "active" && part.partType !== "instruction");
-  if (activeContentParts.length === 1) {
-    const partType = activeContentParts[0].partType;
-    if (partType === "listening") return "listening";
-    if (partType === "writing") return "writing";
-    if (partType === "photo_submission") return "photo_submission";
-    if (partType === "quiz") return "quiz";
-    if (partType === "vocabulary_example") return "vocabulary_example";
-    if (partType === "vocabulary_recording") return "vocabulary_recording";
-    return "listening_recording";
-  }
-
-  const itemType = assignment.items[0]?.itemType;
-  if (itemType === "listening") return "listening";
-  if (itemType === "writing_prompt") return "writing";
-  if (itemType === "photo_submission") return "photo_submission";
-  if (itemType === "quiz_prompt") return "quiz";
-  if (itemType === "vocabulary_example") return "vocabulary_example";
-  if (itemType === "vocabulary_recording") return "vocabulary_recording";
-  return normalizeAssignmentType(assignment.assignmentType);
 }
 
 function subjectForAssignment(assignment: AssignmentWithTarget) {
@@ -98,10 +79,10 @@ function subjectForAssignment(assignment: AssignmentWithTarget) {
 }
 
 function hasOutdatedRecordingSubmission(assignment: AssignmentWithTarget) {
-  const activeParts = (assignment.parts ?? []).filter((part) => part.status === "active");
+  const activeParts = getActiveAssignmentParts(assignment.parts);
   const hasRecordingPart = activeParts.some((part) => part.partType === "recording" || part.partType === "vocabulary_recording");
-  const currentType = effectiveAssignmentType(assignment);
-  const currentRequiresRecording = activeParts.length > 0
+  const currentType = getCanonicalAssignmentType(assignment);
+  const currentRequiresRecording = isMultipartAssignment(assignment)
     ? hasRecordingPart
     : currentType === "listening_recording" || currentType === "vocabulary_recording";
   return !currentRequiresRecording && assignment.items.some((item) => Boolean(item.recordingUrl));
