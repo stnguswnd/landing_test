@@ -14,20 +14,50 @@ import { VocabularyExampleHomework } from "./VocabularyExampleHomework";
 import { VocabularyRecordingHomework } from "./VocabularyRecordingHomework";
 import { WritingHomework } from "./WritingHomework";
 
-function HomeworkByType({ assignment }: { assignment: Assignment }) {
-  const assignmentType = getCanonicalAssignmentType(assignment);
-  const activeParts = getActiveAssignmentParts(assignment.parts);
+function assignmentWithSinglePartContent(assignment: Assignment): Assignment {
+  const part = getActiveAssignmentParts(assignment.parts).find((activePart) => activePart.partType !== "instruction");
+  const baseItem = assignment.items[0];
 
-  if (assignmentType === "photo_submission") return <PhotoSubmissionHomework assignment={{ ...assignment, assignmentType }} />;
-  if (assignmentType === "listening") return <ListeningHomework assignment={{ ...assignment, assignmentType }} />;
-  if (assignmentType === "writing") return <WritingHomework assignment={{ ...assignment, assignmentType }} />;
-  if (assignmentType === "vocabulary_example") return <VocabularyExampleHomework assignment={{ ...assignment, assignmentType }} />;
-  if (assignmentType === "vocabulary_recording") return <VocabularyRecordingHomework assignment={{ ...assignment, assignmentType }} />;
+  if (!part || !baseItem) return assignment;
+
+  const image = (part.attachments ?? []).find((attachment) => attachment.attachmentType === "image");
+  const audio = (part.attachments ?? []).find((attachment) => attachment.attachmentType === "audio");
+
+  return {
+    ...assignment,
+    title: part.title || assignment.title,
+    description: part.instruction || assignment.description,
+    imageUrl: image?.fileUrl ?? assignment.imageUrl,
+    vocabularyItems: part.vocabularyItems?.length ? part.vocabularyItems : assignment.vocabularyItems,
+    items: [{
+      ...baseItem,
+      title: part.title || baseItem.title,
+      passageText: part.scriptText || baseItem.passageText,
+      audioUrl: audio?.fileUrl || baseItem.audioUrl,
+      audioFileName: audio?.fileName || baseItem.audioFileName,
+      writingMode: part.writingMode ?? baseItem.writingMode,
+      writingUnit: part.writingUnit ?? baseItem.writingUnit,
+      writingHint: part.writingHint ?? baseItem.writingHint,
+      writingExample: part.writingExample ?? baseItem.writingExample,
+    }],
+  };
+}
+
+function HomeworkByType({ assignment }: { assignment: Assignment }) {
+  const effectiveAssignment = assignmentWithSinglePartContent(assignment);
+  const assignmentType = getCanonicalAssignmentType(effectiveAssignment);
+  const activeParts = getActiveAssignmentParts(effectiveAssignment.parts);
+
+  if (assignmentType === "photo_submission") return <PhotoSubmissionHomework assignment={{ ...effectiveAssignment, assignmentType }} />;
+  if (assignmentType === "listening") return <ListeningHomework assignment={{ ...effectiveAssignment, assignmentType }} />;
+  if (assignmentType === "writing") return <WritingHomework assignment={{ ...effectiveAssignment, assignmentType }} />;
+  if (assignmentType === "vocabulary_example") return <VocabularyExampleHomework assignment={{ ...effectiveAssignment, assignmentType }} />;
+  if (assignmentType === "vocabulary_recording") return <VocabularyRecordingHomework assignment={{ ...effectiveAssignment, assignmentType }} />;
   if (assignmentType === "quiz") {
     const quizPart = activeParts.find((part) => part.partType === "quiz");
-    return quizPart ? <QuizHomework assignment={{ ...assignment, assignmentType }} part={quizPart} /> : null;
+    return quizPart ? <QuizHomework assignment={{ ...effectiveAssignment, assignmentType }} part={quizPart} /> : null;
   }
-  return <RlRecordingHomework assignment={{ ...assignment, assignmentType }} />;
+  return <RlRecordingHomework assignment={{ ...effectiveAssignment, assignmentType }} />;
 }
 
 function layoutTitle(assignment: Assignment) {
