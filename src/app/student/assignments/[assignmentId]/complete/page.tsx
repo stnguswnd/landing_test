@@ -82,17 +82,23 @@ function QuizResultView({
         const answer = answers.find((item) => item.questionId === question.id);
         const selected = question.choices.find((choice) => choice.id === answer?.selectedChoiceId);
         const correct = question.choices.find((choice) => choice.isCorrect);
+        const isCorrect = answer?.isCorrect === true;
+        const reason = question.explanation;
         return (
           <article key={question.id} className="rounded-lg border border-line p-4">
             <div className="flex flex-wrap gap-2">
               <Badge tone="blue">Q{index + 1}</Badge>
-              <Badge tone={answer?.isCorrect ? "green" : "yellow"}>{answer?.isCorrect ? "정답" : "오답"}</Badge>
+              <Badge tone={isCorrect ? "green" : "yellow"}>{isCorrect ? "정답" : "오답"}</Badge>
             </div>
             <p className="mt-3 text-lg font-bold">{question.questionText}</p>
             <div className="mt-3 grid gap-2 text-sm font-semibold text-slate-700">
               <p>내 답: {selected ? `${selected.choiceLabel}. ${selected.choiceText}` : "-"}</p>
-              {!answer?.isCorrect && <p>정답: {correct ? `${correct.choiceLabel}. ${correct.choiceText}` : "-"}</p>}
-              {!answer?.isCorrect && selected?.incorrectReason && <p className="rounded-md bg-red-50 p-3 text-red-700">이유: {selected.incorrectReason}</p>}
+              {!isCorrect && <p>정답: {correct ? `${correct.choiceLabel}. ${correct.choiceText}` : "-"}</p>}
+              {reason && (
+                <p className={`rounded-md p-3 ${isCorrect ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+                  정답 이유: {reason}
+                </p>
+              )}
             </div>
           </article>
         );
@@ -332,7 +338,7 @@ export default async function CompletePage({ params }: { params: Promise<{ assig
 
         <div className="grid gap-3 sm:grid-cols-3">
           <Button href="/student/home" variant="secondary" className="min-h-12">과제 목록으로</Button>
-          <Button href={`/student/assignments/${assignmentId}?resubmit=1`} className="min-h-12">다시 제출하기</Button>
+          {(type !== "quiz" || assignment.targetStatus === "returned") && <Button href={`/student/assignments/${assignmentId}?resubmit=1`} className="min-h-12">다시 제출하기</Button>}
         </div>
       </div>
     </StudentLayout>

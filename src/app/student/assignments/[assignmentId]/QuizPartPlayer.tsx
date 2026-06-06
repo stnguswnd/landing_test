@@ -45,8 +45,8 @@ export function QuizPartPlayer({ assignment, part, partIndex = 0, partCount = 1,
   const [error, setError] = useState("");
   const currentQuestion = questions[currentIndex];
   const selectedChoiceId = currentQuestion ? answers[currentQuestion.id] : "";
-  const selectedChoice = currentQuestion?.choices.find((choice) => choice.id === selectedChoiceId);
-  const canContinue = Boolean(selectedChoice?.isCorrect);
+  const hasSelectedChoice = Boolean(selectedChoiceId);
+  const canContinue = hasSelectedChoice;
   const answeredCount = useMemo(() => questions.filter((question) => answers[question.id]).length, [answers, questions]);
   const isLastQuestion = currentIndex === questions.length - 1;
   const allAnswered = questions.length > 0 && answeredCount === questions.length;
@@ -155,14 +155,7 @@ export function QuizPartPlayer({ assignment, part, partIndex = 0, partCount = 1,
         <div className="mt-6 grid gap-3">
           {currentQuestion.choices.map((choice) => {
             const isSelected = choice.id === selectedChoiceId;
-            const showResult = Boolean(selectedChoiceId);
-            const tone = showResult && isSelected && choice.isCorrect
-              ? "border-green-500 bg-green-50 text-green-800"
-              : showResult && isSelected
-                ? "border-red-400 bg-red-50 text-red-800"
-                : isSelected
-                  ? "border-action bg-blue-50 text-action"
-                  : "border-line bg-white text-slate-800";
+            const tone = isSelected ? "border-action bg-blue-50 text-action" : "border-line bg-white text-slate-800";
             return (
               <button
                 key={choice.id}
@@ -176,20 +169,6 @@ export function QuizPartPlayer({ assignment, part, partIndex = 0, partCount = 1,
             );
           })}
         </div>
-
-        {selectedChoice && (
-          <div className={`mt-5 rounded-lg border p-4 ${selectedChoice.isCorrect ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}>
-            <p className={`text-lg font-extrabold ${selectedChoice.isCorrect ? "text-green-700" : "text-red-700"}`}>
-              {selectedChoice.isCorrect ? "정답이에요!" : "오답"}
-            </p>
-            {!selectedChoice.isCorrect && selectedChoice.incorrectReason && (
-              <p className="mt-2 whitespace-pre-wrap text-base font-semibold leading-7 text-red-700">{selectedChoice.incorrectReason}</p>
-            )}
-            {selectedChoice.isCorrect && (
-              <p className="mt-2 text-base font-semibold text-green-700">{currentQuestion.explanation || "잘했어요."}</p>
-            )}
-          </div>
-        )}
       </Card>
 
       {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm font-bold text-red-700">{error}</p>}
@@ -199,7 +178,7 @@ export function QuizPartPlayer({ assignment, part, partIndex = 0, partCount = 1,
           이전 문제
         </Button>
         <Button type="button" onClick={goNextOrSubmit} disabled={!canContinue || pending || (isLastQuestion && !allAnswered)}>
-          {!selectedChoiceId ? "답을 선택해주세요" : !canContinue ? "다시 골라보세요" : isLastQuestion ? (partMode?.label ?? "제출하기") : "다음 문제"}
+          {!selectedChoiceId ? "답을 선택해주세요" : isLastQuestion ? (partMode?.label ?? "제출하기") : "다음 문제"}
         </Button>
       </div>
     </div>

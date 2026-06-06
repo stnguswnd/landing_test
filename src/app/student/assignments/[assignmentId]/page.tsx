@@ -82,6 +82,9 @@ export default async function StudentAssignmentPage({
 
   const assignment = await studentAssignmentRepository.getAssignmentForStudent(session.studentId, session.teacherId, assignmentId);
   if (!assignment) notFound();
+  if (getCanonicalAssignmentType(assignment) === "quiz" && assignment.submittedAt && assignment.targetStatus !== "returned") {
+    redirect(`/student/assignments/${assignment.id}/complete`);
+  }
 
   return (
     <StudentLayout title={layoutTitle(assignment)}>

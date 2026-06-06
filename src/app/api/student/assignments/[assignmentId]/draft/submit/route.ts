@@ -9,6 +9,7 @@ export const runtime = "nodejs";
 type DraftRow = {
   id: string;
   assignment_id: string;
+  assignment_type: string;
   student_id: string;
   assignment_target_id: string | null;
   current_part_id: string | null;
@@ -16,6 +17,7 @@ type DraftRow = {
   draft_data: Record<string, Record<string, unknown>>;
   due_at: Date | null;
   target_id: string;
+  target_status: string;
   submission_id: string | null;
 };
 
@@ -92,8 +94,10 @@ export async function POST(
       `
         select
           sad.*,
+          a.assignment_type,
           coalesce(at.due_at, a.due_at) as due_at,
           at.id as target_id,
+          at.status as target_status,
           sub.id as submission_id
         from student_assignment_drafts sad
         join assignments a on a.id = sad.assignment_id and a.teacher_id = $3
@@ -110,6 +114,9 @@ export async function POST(
     const draft = draftResult.rows[0];
     if (!draft) {
       return NextResponse.json({ error: "최종 제출할 임시저장 내용이 없습니다." }, { status: 400 });
+    }
+    if (draft.assignment_type === "quiz" && draft.submission_id && draft.target_status !== "returned") {
+      return NextResponse.json({ error: "퀴즈 숙제는 다시 제출할 수 없습니다." }, { status: 409 });
     }
 
     const partsResult = await client.query<PartRow>(
