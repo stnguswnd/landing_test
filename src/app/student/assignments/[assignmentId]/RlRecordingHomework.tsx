@@ -127,7 +127,7 @@ export function RlRecordingHomework({ assignment, partMode, draftAttachments = [
           fileName: `recording-${assignment.id}-${Date.now()}.webm`,
         });
         setSubmitOpen(false);
-        router.push(`/student/assignments/${assignment.id}/complete`);
+        router.replace(`/student/assignments/${assignment.id}/complete`);
       } catch (err) {
         setError(err instanceof Error ? err.message : "녹음 제출 중 오류가 발생했습니다.");
         setSubmitOpen(false);

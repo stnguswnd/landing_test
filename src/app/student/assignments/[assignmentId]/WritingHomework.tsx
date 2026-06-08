@@ -118,7 +118,7 @@ export function WritingHomework({ assignment, partMode, draftData }: { assignmen
           aiFeedbackRaw: aiResult.raw,
         });
         setIsSubmitModalOpen(false);
-        router.push(`/student/assignments/${assignment.id}/complete`);
+        router.replace(`/student/assignments/${assignment.id}/complete`);
       } catch (err) {
         setError(err instanceof Error ? err.message : "라이팅 제출 중 오류가 발생했습니다.");
       }

@@ -72,7 +72,7 @@ export function ListeningHomework({ assignment, partMode }: { assignment: Assign
       try {
         await completeListeningAssignment(assignment.id);
         setCompleteOpen(false);
-        router.push(`/student/assignments/${assignment.id}/complete`);
+        router.replace(`/student/assignments/${assignment.id}/complete`);
       } catch (err) {
         setError(err instanceof Error ? err.message : "완료 처리에 실패했습니다. 다시 시도해주세요.");
       }

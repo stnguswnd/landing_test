@@ -226,7 +226,7 @@ export function MultiPartHomework({ assignment }: { assignment: Assignment }) {
     try {
       await persistCurrentPart(payload);
       await submitAssignmentDraft(assignment.id);
-      router.push(`/student/assignments/${assignment.id}/complete`);
+      router.replace(`/student/assignments/${assignment.id}/complete`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "최종 제출 중 오류가 발생했습니다.";
       setSaveError(message);

@@ -160,7 +160,7 @@ export function PhotoSubmissionHomework({
           keptAttachmentIds: visibleExistingImages.map((image) => image.id),
         });
         setSubmitOpen(false);
-        router.push(`/student/assignments/${assignment.id}/complete`);
+        router.replace(`/student/assignments/${assignment.id}/complete`);
       } catch (err) {
         setError(err instanceof Error ? err.message : "사진 제출 중 오류가 발생했습니다.");
       }

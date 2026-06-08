@@ -15,6 +15,7 @@ import { storageBuckets } from "@/lib/supabase/storage";
 import { getStudentSession } from "@/server/auth/studentSession";
 
 import { StudentCalendarClient, type StudentCalendarEvent } from "./StudentCalendarClient";
+import { HomeworkActionButton } from "./HomeworkActionButton";
 import { StudentNoticeCarousel } from "./StudentNoticeCarousel";
 
 type AssignmentWithTarget = Awaited<ReturnType<typeof studentAssignmentRepository.getAssignmentsForStudent>>[number] & {
@@ -257,7 +258,7 @@ function HeroMetric({ label, value }: { label: string; value: string }) {
 
 function WeeklyHomeworkSection({ assignments }: { assignments: AssignmentWithTarget[] }) {
   return (
-    <section id="weekly-homework" className="student-section">
+    <section id="weekly-homework" className="student-section scroll-mt-24">
       <div className="mb-5 flex items-end justify-between gap-3">
         <div>
           <Badge tone="green">Weekly Homework</Badge>
@@ -319,9 +320,9 @@ function HomeworkSubjectCard({ assignment }: { assignment: AssignmentWithTarget 
         )}
         {hasSubmitted && <p className="mt-2 text-xs font-semibold text-slate-500">제출 {formatDateTime(assignment.submittedAt)}</p>}
       </div>
-      <Button href={href} className="mt-4 min-h-10 w-full px-3 text-xs sm:min-h-12 sm:text-sm">
+      <HomeworkActionButton href={href}>
         {buttonLabel}
-      </Button>
+      </HomeworkActionButton>
     </Card>
   );
 }

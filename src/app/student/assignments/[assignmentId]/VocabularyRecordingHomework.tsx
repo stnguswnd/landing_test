@@ -109,7 +109,7 @@ export function VocabularyRecordingHomework({ assignment, partMode, draftAttachm
         setMessage(data.error ?? "녹음 제출 중 오류가 발생했습니다.");
         return;
       }
-      router.push(`/student/assignments/${assignment.id}/complete`);
+      router.replace(`/student/assignments/${assignment.id}/complete`);
     });
   }
 

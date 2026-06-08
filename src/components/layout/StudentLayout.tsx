@@ -1,13 +1,11 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { BackNavigationGuard } from "@/components/layout/BackNavigationGuard";
 import { logoutAction } from "@/lib/auth/actions";
 
 export function StudentLayout({ children, title }: { children: ReactNode; title: string }) {
   return (
     <div className="student-shell">
-      <BackNavigationGuard fallbackHref="/student/home" />
       <header className="fixed inset-x-0 top-0 z-[60] border-b border-line bg-white/95 px-4 py-3 backdrop-blur-xl">
         <div className="student-container flex h-[54px] items-center justify-between">
           <Link href="/student/home" className="truncate text-lg font-extrabold tracking-[-0.03em] text-[#14532d]">

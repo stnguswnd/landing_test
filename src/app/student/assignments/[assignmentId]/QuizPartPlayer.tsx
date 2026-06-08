@@ -93,7 +93,7 @@ export function QuizPartPlayer({ assignment, part, partIndex = 0, partCount = 1,
       } else {
         await persist(answers);
         await submitAssignmentDraft(assignment.id);
-        router.push(`/student/assignments/${assignment.id}/complete`);
+        router.replace(`/student/assignments/${assignment.id}/complete`);
       }
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "퀴즈를 제출하지 못했습니다.");
