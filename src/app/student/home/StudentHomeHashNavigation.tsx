@@ -7,6 +7,7 @@ const STUDENT_HOME_PATH = "/student/home";
 const TODAY_HASH = "#today";
 const KNOWN_SECTION_HASHES = new Set([TODAY_HASH, "#weekly-homework"]);
 const HOME_BOUNDARY_STATE_KEY = "__studentHomeBoundary";
+const HOMEWORK_LIST_BOUNDARY_STATE_KEY = "__studentHomeworkListBoundary";
 
 function getCookie(name: string) {
   return document.cookie
@@ -38,6 +39,17 @@ function pushHomeBoundary() {
   window.history.pushState({ ...state, [HOME_BOUNDARY_STATE_KEY]: true }, "", `${STUDENT_HOME_PATH}${TODAY_HASH}`);
 }
 
+function ensureWeeklyHomeworkHasTodayFallback() {
+  if (!isStudentAuthenticated()) return;
+  if (window.location.pathname !== STUDENT_HOME_PATH || window.location.hash !== "#weekly-homework") return;
+
+  const state = historyState();
+  if (state[HOMEWORK_LIST_BOUNDARY_STATE_KEY] === true) return;
+
+  window.history.replaceState({ ...state, [HOME_BOUNDARY_STATE_KEY]: true }, "", `${STUDENT_HOME_PATH}${TODAY_HASH}`);
+  window.history.pushState({ [HOMEWORK_LIST_BOUNDARY_STATE_KEY]: true }, "", `${STUDENT_HOME_PATH}#weekly-homework`);
+}
+
 export function StudentHomeHashNavigation() {
   const router = useRouter();
 
@@ -45,6 +57,7 @@ export function StudentHomeHashNavigation() {
     if (window.location.pathname === STUDENT_HOME_PATH && !window.location.hash) {
       window.history.replaceState(window.history.state, "", `${STUDENT_HOME_PATH}${TODAY_HASH}`);
     }
+    ensureWeeklyHomeworkHasTodayFallback();
 
     const scrollAfterRender = () => window.requestAnimationFrame(scrollToCurrentHash);
     const keepStudentHomeBoundary = () => {
@@ -54,6 +67,7 @@ export function StudentHomeHashNavigation() {
       pushHomeBoundary();
     };
     const syncHashState = () => {
+      ensureWeeklyHomeworkHasTodayFallback();
       scrollAfterRender();
       keepStudentHomeBoundary();
     };
