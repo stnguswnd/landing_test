@@ -97,7 +97,11 @@ export async function POST(
           a.assignment_type,
           coalesce(at.due_at, a.due_at) as due_at,
           at.id as target_id,
-          at.status as target_status,
+          case
+            when sub.status in ('reviewed', 'returned') then sub.status
+            when at.status in ('submitted', 'late') then at.status
+            else coalesce(sub.status, at.status)
+          end as target_status,
           sub.id as submission_id
         from student_assignment_drafts sad
         join assignments a on a.id = sad.assignment_id and a.teacher_id = $3
