@@ -5,7 +5,7 @@ const studentSessionCookieName = "homework_student_session";
 const roleCookieName = "homework_role";
 
 function loggedInDestination(sessionId?: string, studentSessionId?: string, role?: string) {
-  if (studentSessionId || role === "student") return "/student/home";
+  if (studentSessionId || role === "student") return "/student/home#today";
   if (sessionId || role === "teacher") return "/teacher/dashboard";
   return null;
 }
@@ -27,7 +27,7 @@ export function proxy(request: NextRequest) {
     }
 
     if (studentSessionId || role === "student") {
-      return NextResponse.redirect(new URL("/student/home", request.url));
+      return NextResponse.redirect(new URL("/student/home#today", request.url));
     }
   }
 
@@ -39,7 +39,7 @@ export function proxy(request: NextRequest) {
 
   if (pathname.startsWith("/student")) {
     if (!sessionId && !studentSessionId) {
-      return NextResponse.redirect(new URL("/login", request.url));
+      return NextResponse.redirect(new URL("/", request.url));
     }
 
     if ((sessionId && !studentSessionId) || role === "teacher") {

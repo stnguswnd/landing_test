@@ -47,6 +47,7 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json({
+    destination: "/student/home#today",
     student: {
       id: student.id,
       teacherId: student.teacher_id,

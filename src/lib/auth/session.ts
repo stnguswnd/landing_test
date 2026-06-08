@@ -37,7 +37,7 @@ function mapUser(row: AuthUserRow): AuthUser {
 }
 
 export function getDestinationForRole(role: UserRole) {
-  return role === "teacher" ? "/teacher/dashboard" : "/student/home";
+  return role === "teacher" ? "/teacher/dashboard" : "/student/home#today";
 }
 
 export async function createSession(user: AuthUser) {

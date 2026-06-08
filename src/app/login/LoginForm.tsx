@@ -19,7 +19,7 @@ function redirectIfAlreadyAuthenticated() {
     window.location.replace("/teacher/dashboard");
   }
   if (role === "student") {
-    window.location.replace("/student/home");
+    window.location.replace("/student/home#today");
   }
 }
 

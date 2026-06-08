@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function StudentEntryPage() {
-  redirect("/student/home");
+  redirect("/student/home#today");
 }

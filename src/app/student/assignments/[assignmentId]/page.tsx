@@ -78,7 +78,7 @@ export default async function StudentAssignmentPage({
 }) {
   const [{ assignmentId }, session] = await Promise.all([params, getStudentSession()]);
 
-  if (!session) redirect("/login");
+  if (!session) redirect("/");
 
   const assignment = await studentAssignmentRepository.getAssignmentForStudent(session.studentId, session.teacherId, assignmentId);
   if (!assignment) notFound();

@@ -198,7 +198,7 @@ function MultiPartSubmissionView({
 
 export default async function CompletePage({ params }: { params: Promise<{ assignmentId: string }> }) {
   const [{ assignmentId }, session] = await Promise.all([params, getStudentSession()]);
-  if (!session) redirect("/login");
+  if (!session) redirect("/");
 
   const assignment = await studentAssignmentRepository.getAssignmentForStudent(session.studentId, session.teacherId, assignmentId);
   if (!assignment) redirect("/student/home");
@@ -337,7 +337,7 @@ export default async function CompletePage({ params }: { params: Promise<{ assig
         )}
 
         <div className="grid gap-3 sm:grid-cols-3">
-          <Button href="/student/home" variant="secondary" className="min-h-12">과제 목록으로</Button>
+          <Button href="/student/home#weekly-homework" variant="secondary" className="min-h-12">과제 목록으로</Button>
           {(type !== "quiz" || assignment.targetStatus === "returned") && <Button href={`/student/assignments/${assignmentId}?resubmit=1`} className="min-h-12">다시 제출하기</Button>}
         </div>
       </div>

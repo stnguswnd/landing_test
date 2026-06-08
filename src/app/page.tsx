@@ -73,7 +73,7 @@ export default async function HomePage() {
   const studentSessionId = cookieStore.get(studentSessionCookieName)?.value;
   const role = cookieStore.get(roleCookieName)?.value;
 
-  if (studentSessionId || role === "student") redirect("/student/home");
+  if (studentSessionId || role === "student") redirect("/student/home#today");
   if (sessionId || role === "teacher") redirect("/teacher/dashboard");
 
   const schema = {

@@ -109,7 +109,7 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     role: "student",
-    destination: "/student/home",
+    destination: "/student/home#today",
     student: {
       id: student.id,
       teacherId: student.teacher_id,

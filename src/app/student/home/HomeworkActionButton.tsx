@@ -18,7 +18,7 @@ export function HomeworkActionButton({ href, children }: HomeworkActionButtonPro
     if (typeof window !== "undefined") {
       const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
       if (window.location.pathname === "/student/home" && currentUrl !== HOMEWORK_SECTION_URL) {
-        window.history.pushState(window.history.state, "", HOMEWORK_SECTION_URL);
+        window.history.pushState(null, "", HOMEWORK_SECTION_URL);
       }
     }
     router.push(href);

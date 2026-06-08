@@ -59,5 +59,5 @@ export async function signupAction(_previousState: ActionState, _formData: FormD
 
 export async function logoutAction() {
   await destroySession();
-  redirect("/login");
+  redirect("/");
 }

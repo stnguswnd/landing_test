@@ -15,7 +15,7 @@ export default async function LoginPage() {
   }
 
   if (studentSession) {
-    redirect("/student/home");
+    redirect("/student/home#today");
   }
 
   return (

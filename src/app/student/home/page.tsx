@@ -16,6 +16,7 @@ import { getStudentSession } from "@/server/auth/studentSession";
 
 import { StudentCalendarClient, type StudentCalendarEvent } from "./StudentCalendarClient";
 import { HomeworkActionButton } from "./HomeworkActionButton";
+import { StudentHomeHashNavigation } from "./StudentHomeHashNavigation";
 import { StudentNoticeCarousel } from "./StudentNoticeCarousel";
 
 type AssignmentWithTarget = Awaited<ReturnType<typeof studentAssignmentRepository.getAssignmentsForStudent>>[number] & {
@@ -181,7 +182,7 @@ export default async function StudentHomePage() {
   const session = await getStudentSession();
 
   if (!session) {
-    redirect("/login");
+    redirect("/");
   }
 
   const calendarRange = calendarRangeAroundToday();
@@ -196,6 +197,7 @@ export default async function StudentHomePage() {
 
   return (
     <StudentLayout title="학생 홈">
+      <StudentHomeHashNavigation />
       <div className="grid gap-8">
         <StudentTeamHeader studentName={profile.name} classNames={profile.class_names} classLogoUrl={profile.firstLogoUrl} assignments={assignments} upcomingTest={upcomingTests[0]} />
         <StudentNoticeCarousel notices={notices} />
@@ -224,7 +226,7 @@ function StudentTeamHeader({
 }) {
   const incompleteCount = assignments.filter((assignment) => homeworkStatus(assignment) === "incomplete" || homeworkStatus(assignment) === "returned").length;
   return (
-    <section className="student-hero-panel px-5 py-7 text-white md:px-8 md:py-10">
+    <section id="today" className="student-hero-panel scroll-mt-24 px-5 py-7 text-white md:px-8 md:py-10">
       <div className="grid gap-8 lg:grid-cols-[1.35fr_0.65fr] lg:items-end">
         <div>
           <div className="flex items-center gap-3">
