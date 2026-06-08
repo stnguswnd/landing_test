@@ -163,6 +163,28 @@ router.push(href);
 
 이미 `/student/home#weekly-homework`에 있을 때 숙제 카드를 누르면 `currentUrl !== HOMEWORK_SECTION_URL` 조건 때문에 같은 weekly entry를 과하게 중복 push하지 않는다.
 
+## 앱 내부 과제 목록 버튼
+
+브라우저/모바일 기본 뒤로가기 정책과 별개로, 학생이 명시적으로 누를 수 있는 앱 내부 버튼도 추가했다.
+
+파일:
+
+- `src/app/student/assignments/[assignmentId]/HomeworkListBackLink.tsx`
+- `src/app/student/assignments/[assignmentId]/page.tsx`
+- `src/app/student/assignments/[assignmentId]/complete/page.tsx`
+
+동작:
+
+```text
+숙제 상세 또는 완료 화면
+→ "← 과제 목록으로"
+→ /student/home#weekly-homework
+→ 브라우저 뒤로가기
+→ /student/home#today
+```
+
+이 버튼은 `router.back()`을 쓰지 않고 `router.replace("/student/home#weekly-homework", { scroll: false })`로 이동한다. 버튼으로 목록에 나간 뒤 브라우저 뒤로가기를 누르면 숙제 상세로 되돌아가지 않고 `/student/home#today`로 가게 하기 위해서다.
+
 ## 숙제 상세 직접 유입 정책
 
 대화 중 상세 직접 유입 대응용 client boundary를 잠깐 추가했다가, 사용자가 "숙제 상세 직접 유입은 없을 것"이라고 정정하여 제거했다.

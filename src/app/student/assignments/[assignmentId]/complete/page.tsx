@@ -10,6 +10,7 @@ import { assignmentTypeLabel, normalizeAssignmentType } from "@/lib/assignmentTy
 import { formatDateTime, formatDue } from "@/lib/format";
 import { getStudentSession } from "@/server/auth/studentSession";
 import type { Assignment, AssignmentSubmissionPart } from "@/types/assignment";
+import { HomeworkListBackLink } from "../HomeworkListBackLink";
 
 function statusLabel(status?: string) {
   if (status === "reviewed" || status === "completed") return "완료";
@@ -213,6 +214,7 @@ export default async function CompletePage({ params }: { params: Promise<{ assig
 
   return (
     <StudentLayout title="제출 내용">
+      <HomeworkListBackLink />
       <div className="grid gap-4">
         <Card className="text-center shadow-soft">
           <div className="mx-auto grid size-20 place-items-center rounded-full bg-green-50 text-4xl font-bold text-green-700">✓</div>

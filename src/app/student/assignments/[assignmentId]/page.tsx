@@ -5,6 +5,7 @@ import { getActiveAssignmentParts, getCanonicalAssignmentType, isMultipartAssign
 import { studentAssignmentRepository } from "@/features/assignments/repositories/studentAssignmentRepository";
 import { getStudentSession } from "@/server/auth/studentSession";
 import type { Assignment } from "@/types/assignment";
+import { HomeworkListBackLink } from "./HomeworkListBackLink";
 import { ListeningHomework } from "./ListeningHomework";
 import { MultiPartHomework } from "./MultiPartHomework";
 import { PhotoSubmissionHomework } from "./PhotoSubmissionHomework";
@@ -88,6 +89,7 @@ export default async function StudentAssignmentPage({
 
   return (
     <StudentLayout title={layoutTitle(assignment)}>
+      <HomeworkListBackLink />
       {isMultipartAssignment(assignment)
         ? <MultiPartHomework assignment={assignment} />
         : <HomeworkByType assignment={assignment} />}
