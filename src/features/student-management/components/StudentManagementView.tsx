@@ -358,14 +358,18 @@ function HomeworkStatusOverview({ history }: { history: StudentLearningHistory[]
   const submittedCount = history.filter((item) => item.submitStatus === "submitted" || item.submitStatus === "late").length;
   const missingCount = history.filter((item) => item.submitStatus === "not_submitted").length;
   const needsReviewCount = history.filter((item) => item.reviewStatus === "pending").length;
+  const approvedCount = history.filter((item) => item.reviewStatus === "approved" || item.reviewStatus === "reviewed").length;
+  const returnedCount = history.filter((item) => item.reviewStatus === "returned").length;
 
   return (
     <section className="mt-5 grid gap-4">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         <StatusMetric label="전체 숙제" value={history.length} />
         <StatusMetric label="제출 완료" value={submittedCount} tone="green" />
         <StatusMetric label="미제출" value={missingCount} tone="red" />
         <StatusMetric label="검토 필요" value={needsReviewCount} tone="yellow" />
+        <StatusMetric label="승인" value={approvedCount} tone="green" />
+        <StatusMetric label="반려" value={returnedCount} tone="red" />
       </div>
     </section>
   );
@@ -712,5 +716,8 @@ function submitStatusLabel(status: StudentLearningHistory["submitStatus"]) {
 }
 
 function reviewStatusLabel(status: StudentLearningHistory["reviewStatus"]) {
-  return status === "pending" ? "검토 필요" : status === "reviewed" ? "검토 완료" : "-";
+  if (status === "pending") return "검토 필요";
+  if (status === "approved" || status === "reviewed") return "승인";
+  if (status === "returned") return "반려";
+  return "-";
 }

@@ -30,7 +30,7 @@ export type StudentLearningHistory = {
   className?: string;
   submitStatus: "submitted" | "not_submitted" | "late";
   score?: number | null;
-  reviewStatus: "pending" | "reviewed" | "none";
+  reviewStatus: "pending" | "approved" | "returned" | "reviewed" | "none";
   detailHref?: string;
   submissionId?: string;
   assignmentTargetId?: string;

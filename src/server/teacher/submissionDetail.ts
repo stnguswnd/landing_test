@@ -8,6 +8,8 @@ import { normalizeAssignmentType } from "@/lib/assignmentTypes";
 type SubmissionRow = {
   submission_id: string;
   status: string;
+  target_reviewed: boolean | null;
+  feedback_id: string | null;
   submitted_at: Date | null;
   reviewed_at: Date | null;
   due_at: Date | null;
@@ -203,6 +205,8 @@ export async function getTeacherSubmissionDetail(
       select
         sub.id as submission_id,
         sub.status,
+        at.reviewed as target_reviewed,
+        tf.id as feedback_id,
         sub.submitted_at,
         sub.reviewed_at,
         coalesce(at.due_at, a.due_at) as due_at,
@@ -304,7 +308,7 @@ export async function getTeacherSubmissionDetail(
       left join class_memberships cm on cm.student_id = s.id
       left join classes c on c.id = cm.class_id and c.teacher_id = a.teacher_id and c.status = 'active'
       where sub.id = $1
-      group by sub.id, at.due_at, a.due_at, tf.comment, s.id, a.id, ai.id, ap.id, si.id
+      group by sub.id, at.reviewed, at.due_at, a.due_at, tf.id, tf.comment, s.id, a.id, ai.id, ap.id, si.id
       order by coalesce(ap.order_index, ai.order_index)
     `,
     [submissionId, teacherId],
@@ -312,6 +316,11 @@ export async function getTeacherSubmissionDetail(
 
   const first = result.rows[0];
   if (!first) return null;
+  const detailStatus = first.status === "returned"
+    ? "returned"
+    : first.status === "reviewed" || first.target_reviewed || first.feedback_id
+      ? "reviewed"
+      : first.status;
 
   const vocabularyResult = await query<VocabularyRow>(
     `
@@ -389,7 +398,7 @@ export async function getTeacherSubmissionDetail(
       teacherComment: row.teacher_comment ?? undefined,
       status: row.status ?? undefined,
     })),
-    status: first.status,
+    status: detailStatus,
     submittedAt: first.submitted_at?.toISOString(),
     dueAt: first.due_at?.toISOString(),
     isLate: Boolean(first.submitted_at && first.due_at && first.submitted_at.getTime() > first.due_at.getTime()),

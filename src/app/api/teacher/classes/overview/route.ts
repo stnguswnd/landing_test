@@ -22,6 +22,7 @@ type Row = {
   target_reviewed: boolean | null;
   submission_id: string | null;
   submission_status: string | null;
+  feedback_id: string | null;
 };
 
 type SubjectRow = {
@@ -85,12 +86,24 @@ export async function GET(request: Request) {
         at.status as target_status,
         at.reviewed as target_reviewed,
         sub.id as submission_id,
-        sub.status as submission_status
+        sub.status as submission_status,
+        tf.id as feedback_id
       from classes c
       left join class_memberships cm on cm.class_id = c.id
       left join students s on s.id = cm.student_id and s.status = 'active'
-      left join assignment_targets at on at.student_id = s.id and at.class_id = c.id
-      left join assignments a on a.id = at.assignment_id and a.teacher_id = c.teacher_id
+      left join assignment_targets at
+        on at.student_id = s.id
+       and at.status <> 'cancelled'
+      left join assignments a
+        on a.id = at.assignment_id
+       and a.teacher_id = c.teacher_id
+       and (
+         at.class_id = c.id
+         or (
+           a.class_id is null
+           or a.class_id = c.id
+         )
+       )
       left join class_subjects cs on cs.id = at.class_subject_id and cs.teacher_id = c.teacher_id
       left join lateral (
         select sub.id, sub.status
@@ -99,6 +112,7 @@ export async function GET(request: Request) {
         order by sub.submitted_at desc nulls last, sub.updated_at desc
         limit 1
       ) sub on true
+      left join teacher_feedback tf on tf.submission_id = sub.id and tf.teacher_id = c.teacher_id
       where c.teacher_id = $1 and c.status = $2
       order by c.created_at asc, s.name asc, a.updated_at desc nulls last
     `,
@@ -196,7 +210,7 @@ export async function GET(request: Request) {
         submittedKeys.add(targetKey);
         classItem.submitted_count += 1;
       }
-      if (!row.target_reviewed && row.submission_status !== "reviewed") {
+      if (!row.target_reviewed && row.submission_status !== "reviewed" && row.submission_status !== "returned" && !row.feedback_id) {
         if (!reviewKeys.has(targetKey)) {
           reviewKeys.add(targetKey);
           classItem.needs_review_count += 1;

@@ -31,11 +31,16 @@ function reviewActionLabel(status: ReviewStatus) {
   return status === "reviewed" ? "승인" : "반려";
 }
 
+function reviewResultMessage(status: ReviewStatus) {
+  return status === "reviewed" ? "승인되었습니다." : "반려되었습니다.";
+}
+
 export function SubmissionReviewPanel({ detail }: { detail: SubmissionDetail }) {
   const [comment, setComment] = useState(detail.teacherComment ?? "");
   const [status, setStatus] = useState(detail.status);
   const [reviewedAt, setReviewedAt] = useState(detail.reviewedAt);
   const [message, setMessage] = useState("");
+  const [resultStatus, setResultStatus] = useState<ReviewStatus | null>(null);
   const [confirmStatus, setConfirmStatus] = useState<ReviewStatus | null>(null);
   const [pendingStatus, setPendingStatus] = useState<ReviewStatus | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -62,6 +67,7 @@ export function SubmissionReviewPanel({ detail }: { detail: SubmissionDetail }) 
         setStatus(nextStatus);
         setReviewedAt(data?.reviewedAt ?? new Date().toISOString());
         setMessage(nextStatus === "reviewed" ? "승인 피드백을 저장했습니다." : "반려 피드백을 저장했습니다.");
+        setResultStatus(nextStatus);
       } catch {
         setMessage("검토 저장 중 오류가 발생했습니다.");
       } finally {
@@ -122,7 +128,7 @@ export function SubmissionReviewPanel({ detail }: { detail: SubmissionDetail }) 
           <Button
             onClick={() => setConfirmStatus("reviewed")}
             disabled={isPending}
-            variant={status === "reviewed" ? "secondary" : "primary"}
+            variant="primary"
           >
             {pendingStatus === "reviewed" ? "승인 저장 중..." : status === "reviewed" ? "승인됨" : "승인"}
           </Button>
@@ -140,6 +146,19 @@ export function SubmissionReviewPanel({ detail }: { detail: SubmissionDetail }) 
               <Button type="button" variant="secondary" onClick={() => setConfirmStatus(null)} disabled={isPending}>취소</Button>
               <Button type="button" variant={confirmStatus === "returned" ? "danger" : "primary"} onClick={() => review(confirmStatus)} disabled={isPending}>
                 {pendingStatus === confirmStatus ? "저장 중..." : reviewActionLabel(confirmStatus)}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {resultStatus && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4">
+          <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-soft">
+            <h3 className="text-lg font-bold">{reviewResultMessage(resultStatus)}</h3>
+            <div className="mt-6 flex justify-end">
+              <Button type="button" onClick={() => setResultStatus(null)}>
+                확인
               </Button>
             </div>
           </div>

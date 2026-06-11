@@ -21,7 +21,7 @@ type HistoryRow = {
   class_name: string | null;
   submit_status: "submitted" | "not_submitted" | "late";
   score: number | null;
-  review_status: "pending" | "reviewed" | "none";
+  review_status: "pending" | "approved" | "returned" | "reviewed" | "none";
   detail_href: string | null;
   submission_id: string | null;
   assignment_target_id: string;
@@ -164,7 +164,8 @@ export async function GET(_request: Request, { params }: Params) {
         end as submit_status,
         tf.score,
         case
-          when sub.status = 'reviewed' or at.reviewed = true or tf.id is not null then 'reviewed'
+          when sub.status = 'returned' then 'returned'
+          when sub.status = 'reviewed' or at.reviewed = true or tf.id is not null then 'approved'
           when sub.id is not null then 'pending'
           else 'none'
         end as review_status,

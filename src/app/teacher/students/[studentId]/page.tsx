@@ -146,7 +146,8 @@ async function getLearningHistory(teacherId: string, studentId: string) {
         end as submit_status,
         tf.score,
         case
-          when sub.status = 'reviewed' or at.reviewed = true or tf.id is not null then 'reviewed'
+          when sub.status = 'returned' then 'returned'
+          when sub.status = 'reviewed' or at.reviewed = true or tf.id is not null then 'approved'
           when sub.id is not null then 'pending'
           else 'none'
         end as review_status,
@@ -230,7 +231,8 @@ function submitStatusLabel(status: StudentLearningHistory["submitStatus"]) {
 
 function reviewStatusLabel(status: StudentLearningHistory["reviewStatus"]) {
   if (status === "pending") return "검토 필요";
-  if (status === "reviewed") return "검토 완료";
+  if (status === "approved" || status === "reviewed") return "승인";
+  if (status === "returned") return "반려";
   return "피드백 없음";
 }
 
@@ -242,7 +244,8 @@ function submitTone(status: StudentLearningHistory["submitStatus"]) {
 
 function reviewTone(status: StudentLearningHistory["reviewStatus"]) {
   if (status === "pending") return "yellow";
-  if (status === "reviewed") return "green";
+  if (status === "approved" || status === "reviewed") return "green";
+  if (status === "returned") return "red";
   return "gray";
 }
 
@@ -263,6 +266,8 @@ export default async function StudentLearningHistoryPage({
   const submittedCount = history.filter((item) => item.submitStatus === "submitted").length;
   const missingCount = history.filter((item) => item.submitStatus === "not_submitted" || item.submitStatus === "late").length;
   const pendingCount = history.filter((item) => item.reviewStatus === "pending").length;
+  const approvedCount = history.filter((item) => item.reviewStatus === "approved" || item.reviewStatus === "reviewed").length;
+  const returnedCount = history.filter((item) => item.reviewStatus === "returned").length;
 
   return (
     <TeacherLayout title={`${student.name} 학습 이력`}>
@@ -282,11 +287,13 @@ export default async function StudentLearningHistoryPage({
           </div>
         </Card>
 
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-6">
           <Card><p className="text-sm text-slate-500">전체 과제</p><p className="mt-2 text-2xl font-bold">{history.length}개</p></Card>
           <Card><p className="text-sm text-slate-500">제출 완료</p><p className="mt-2 text-2xl font-bold">{submittedCount}개</p></Card>
           <Card><p className="text-sm text-slate-500">미제출</p><p className="mt-2 text-2xl font-bold">{missingCount}개</p></Card>
           <Card><p className="text-sm text-slate-500">검토 필요</p><p className="mt-2 text-2xl font-bold">{pendingCount}개</p></Card>
+          <Card><p className="text-sm text-slate-500">승인</p><p className="mt-2 text-2xl font-bold">{approvedCount}개</p></Card>
+          <Card><p className="text-sm text-slate-500">반려</p><p className="mt-2 text-2xl font-bold">{returnedCount}개</p></Card>
         </div>
 
         <Card>
