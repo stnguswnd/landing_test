@@ -40,6 +40,7 @@ export const studentRepository = {
         password: input.password ?? "12345678",
         schoolName: input.schoolName,
         grade: input.grade,
+        avatarKey: input.avatarKey,
         classIds: input.classIds ?? (input.classId ? [input.classId] : []),
         memo: input.memo,
       }),
@@ -74,5 +75,5 @@ export const studentRepository = {
   },
 };
 
-export const studentAvatars = ["robot", "boy-blonde", "girl-brown", "boy-dark", "girl-black", "boy-orange", "girl-red"];
+export const studentAvatars = ["al", "st", "b", "e", "l"];
 export const gradeOptions = ["미취학", "초1", "초2", "초3", "초4", "초5", "초6", "중1", "중2", "중3", "기타"];

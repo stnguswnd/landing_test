@@ -151,7 +151,7 @@ export async function PATCH(request: Request, { params }: Params) {
     if (typeof body.name === "string") setValue("name", body.name.trim());
     if (typeof body.schoolName === "string") setValue("school_name", body.schoolName.trim() || null);
     if (typeof body.grade === "string") setValue("grade", body.grade.trim() || null);
-    if (typeof body.avatarKey === "string") setValue("avatar_key", body.avatarKey.trim() || "robot");
+    if (typeof body.avatarKey === "string") setValue("avatar_key", body.avatarKey.trim() || "al");
     if (typeof body.memo === "string") setValue("memo", body.memo.trim() || null);
     if (body.status === "active" || body.status === "inactive") setValue("status", body.status);
 

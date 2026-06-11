@@ -20,14 +20,16 @@ const tabs: Array<{ id: StudentManagementTab; label: string }> = [
 type PasswordTarget = "student" | "parent";
 
 const avatarLabel: Record<string, string> = {
-  robot: "AI",
-  "boy-blonde": "B",
-  "girl-brown": "G",
-  "boy-dark": "S",
-  "girl-black": "A",
-  "boy-orange": "O",
-  "girl-red": "R",
+  al: "AL",
+  st: "St",
+  b: "B",
+  e: "E",
+  l: "L",
 };
+
+function normalizeAvatarKey(avatarKey?: string) {
+  return studentAvatars.includes(avatarKey ?? "") ? avatarKey! : "al";
+}
 
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
@@ -158,7 +160,7 @@ export function StudentManagementView({ initialStudents }: { initialStudents: Ma
       schoolName: String(formData.get("schoolName") ?? "").trim(),
       grade: String(formData.get("grade") ?? "").trim(),
       classIds,
-      avatarKey: String(formData.get("avatarKey") ?? "robot"),
+      avatarKey: String(formData.get("avatarKey") ?? "al"),
       memo: String(formData.get("memo") ?? "").trim(),
     });
 
@@ -436,11 +438,11 @@ function DetailTab({
             {studentAvatars.map((avatar) => (
               <button
                 key={avatar}
-                className={cn("rounded-md border p-2", draft.avatarKey === avatar ? "border-action bg-blue-50" : "border-line")}
+                className={cn("rounded-md border p-2", normalizeAvatarKey(draft.avatarKey) === avatar ? "border-action bg-blue-50" : "border-line")}
                 onClick={() => setDraft({ ...draft, avatarKey: avatar })}
                 type="button"
               >
-                <Avatar avatarKey={avatar} selected={draft.avatarKey === avatar} />
+                <Avatar avatarKey={avatar} selected={normalizeAvatarKey(draft.avatarKey) === avatar} />
               </button>
             ))}
           </div>
@@ -459,7 +461,7 @@ function DetailTab({
       </div>
       <div className="grid gap-2 sm:flex sm:justify-end">
         <Button variant="danger" onClick={onDelete}>학생 삭제</Button>
-        <Button onClick={() => onUpdate({ ...draft, classIds: selectedClassIds })}>정보 수정</Button>
+        <Button onClick={() => onUpdate({ ...draft, avatarKey: normalizeAvatarKey(draft.avatarKey), classIds: selectedClassIds })}>정보 수정</Button>
       </div>
     </div>
   );
@@ -517,7 +519,7 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
 function Avatar({ avatarKey, selected }: { avatarKey: string; selected?: boolean }) {
   return (
     <span className={cn("grid size-11 shrink-0 place-items-center rounded-full text-sm font-bold", selected ? "bg-action text-white" : "bg-slate-100 text-slate-700")}>
-      {avatarLabel[avatarKey] ?? "ST"}
+      {avatarLabel[avatarKey] ?? "AL"}
     </span>
   );
 }

@@ -94,6 +94,7 @@ export async function POST(request: Request) {
     password?: string;
     schoolName?: string;
     grade?: string;
+    avatarKey?: string;
     classIds?: string[];
     memo?: string;
   } | null;
@@ -101,6 +102,7 @@ export async function POST(request: Request) {
   const name = body?.name?.trim();
   const studentLoginId = body?.studentLoginId?.trim();
   const password = body?.password ?? "";
+  const avatarKey = body?.avatarKey?.trim() || "al";
   const classIds = Array.isArray(body?.classIds) ? body.classIds.filter(Boolean) : [];
 
   if (!name || !studentLoginId || !password) {
@@ -137,7 +139,7 @@ export async function POST(request: Request) {
           id, teacher_id, student_login_id, password_hash,
           name, school_name, grade, avatar_key, memo, status
         )
-        values ($1, $2, $3, $4, $5, $6, $7, 'robot', $8, 'active')
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active')
       `,
       [
         studentId,
@@ -147,6 +149,7 @@ export async function POST(request: Request) {
         name,
         body?.schoolName?.trim() || null,
         body?.grade?.trim() || null,
+        avatarKey,
         body?.memo?.trim() || null,
       ],
     );
