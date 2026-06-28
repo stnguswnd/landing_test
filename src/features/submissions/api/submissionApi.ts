@@ -113,8 +113,8 @@ export async function requestWritingFeedback(input: WritingFeedbackInput) {
 
 export async function submitWritingAssignment(input: WritingFeedbackInput & {
   originalAnswerText?: string;
-  aiCorrectedText: string;
-  aiFeedback: string;
+  aiCorrectedText?: string;
+  aiFeedback?: string;
   aiGrammarNotes?: string;
   aiExpressionNotes?: string;
   aiFeedbackRaw?: unknown;

@@ -62,7 +62,7 @@ export function VocabularyExampleHomework({ assignment, partMode, draftData }: {
   const currentState = currentWord ? states[currentWord.id] : undefined;
   const allReady = vocabularyItems.length > 0 && vocabularyItems.every((word) => states[word.id]?.originalAnswerText.trim());
   const isLast = currentIndex === vocabularyItems.length - 1;
-  const canRequestFeedback = Boolean(currentState?.originalAnswerText.trim()) && (currentState?.aiFeedbackAttempts ?? 0) < 3 && !pending;
+  const canRequestFeedback = Boolean(currentState?.originalAnswerText.trim()) && !pending;
 
   const instruction = item?.passageText || "Write a word, phrase, or sentence using the vocabulary.";
   const progressText = useMemo(() => `${Math.min(currentIndex + 1, vocabularyItems.length)} / ${vocabularyItems.length}`, [currentIndex, vocabularyItems.length]);
@@ -237,13 +237,13 @@ export function VocabularyExampleHomework({ assignment, partMode, draftData }: {
           </div>
         )}
 
-        <p className="mt-4 text-sm font-semibold text-slate-500">AI 첨삭 가능 횟수: {Math.max(3 - (currentState.aiFeedbackAttempts ?? 0), 0)} / 3</p>
+        <p className="mt-4 text-sm font-semibold text-slate-500">AI 첨삭은 필요할 때 다시 받을 수 있습니다.</p>
         <div className="mt-5 grid gap-3 md:grid-cols-3">
           <Button type="button" variant="secondary" disabled={currentIndex === 0 || pending} onClick={() => setCurrentIndex((value) => Math.max(value - 1, 0))}>
             전 단어
           </Button>
           <Button type="button" variant="secondary" disabled={!canRequestFeedback} onClick={requestFeedback}>
-            {pending ? "첨삭 중..." : currentState.aiFeedbackAttempts >= 3 ? "첨삭 3회 완료" : currentState.reviewed ? "AI 첨삭 다시 받기" : "AI 첨삭받기"}
+            {pending ? "첨삭 중..." : currentState.reviewed ? "AI 첨삭 다시 받기" : "AI 첨삭받기"}
           </Button>
           {isLast ? (
             <ReadyStepButton

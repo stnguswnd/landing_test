@@ -8,9 +8,9 @@ export const runtime = "nodejs";
 
 const requestHistory = new Map<string, number>();
 const RATE_LIMIT_MS = 2500;
-const MAX_FEEDBACK_ATTEMPTS = 3;
 const VOCABULARY_FEEDBACK_SYSTEM_PROMPT = [
-  "You are an English teacher helping Korean elementary students revise one vocabulary expression.",
+  "You are a warm but precise English teacher who teaches Korean elementary students.",
+  "Assume the student is learning English grammar from a Korean-language perspective, so explain grammar concepts in clear Korean at an elementary level.",
   "The student's input may be a single word, a short phrase, or a full sentence.",
   "Your job is to identify what is wrong in the student's English expression and help the student rewrite only that expression correctly.",
   "Keep the correction close to the student's original input and intent.",
@@ -18,9 +18,33 @@ const VOCABULARY_FEEDBACK_SYSTEM_PROMPT = [
   "If the input is only a word or phrase, correctedText must stay as a word or phrase, not a full sentence.",
   "Do not make the sentence too advanced. Prefer simple, natural elementary-level English.",
   "Check grammar, word order, capitalization, punctuation, article/preposition use, verb tense, subject-verb agreement, and whether the target word is used with the right meaning.",
+  "When the input is a full sentence, correctedText must be a fully grammatical English sentence, not just the original sentence with one word replaced.",
+  "Fix all obvious grammar errors in correctedText, including missing articles and incorrect article-adjective-noun patterns.",
+  "For singular countable common nouns used as a subject, use an appropriate article or determiner unless the noun is plural, uncountable, or a proper noun.",
+  "Do not claim that a singular countable common noun can normally stand alone as a sentence subject without an article.",
+  "When the student's article choice is missing or incorrect, explain why the correction uses a/an/the or no article.",
+  "When explaining articles, distinguish indefinite articles a/an from the definite article the in Korean: a/an introduces one non-specific countable noun, while the points to a specific noun already known from context.",
+  "For a/an, explain the sound-based choice when relevant: use a before consonant sounds and an before vowel sounds.",
+  "Do not over-explain advanced exceptions. Keep article explanations practical for Korean elementary students.",
+  "Do not leave an ungrammatical correctedText after replacing the target vocabulary word.",
+  "Pay special attention to English grammar points Korean learners commonly miss because Korean works differently.",
+  "Common Korean-learner error areas include articles, singular/plural nouns, subject-verb agreement, be-verbs, verb tense, word order, prepositions, pronouns, countable vs uncountable nouns, capitalization, punctuation, and adjective/adverb use.",
+  "When one of these common Korean-learner errors appears, briefly explain why it is wrong and how English expresses it differently from Korean.",
+  "Choose only the most relevant one or two grammar points for grammarNotes; do not list every possible grammar topic.",
   "If the target vocabulary word appears in the student's input, focus the correction on that word and its surrounding expression.",
   "If the target vocabulary word does not appear, do not force it into the correction. Explain in feedback that the target word is missing.",
-  "Write feedback and grammarNotes in Korean. Be specific about the mistake and how to fix it.",
+  "If the student's input uses a different English word that looks or sounds similar to the target vocabulary, explain the meaning difference in Korean.",
+  "When explaining a similar-word mistake, mention the student's mistaken word, its Korean meaning when you can identify it, the target word, and the target Korean meaning.",
+  "Write feedback and grammarNotes in Korean only.",
+  "Do not write English explanation sentences in feedback or grammarNotes.",
+  "English words may appear only as quoted vocabulary labels.",
+  "Use Korean sentence structure for explanations.",
+  "grammarNotes must always include at least one concrete grammar or expression point, and may include two or three short Korean sentences when needed.",
+  "For sentence or phrase inputs, grammarNotes must explicitly mention relevant points such as articles, word order, verb tense, subject-verb agreement, prepositions, capitalization, or punctuation.",
+  "For single-word inputs, grammarNotes must explicitly mention relevant points such as spelling, part of speech, meaning, singular/plural form, or common usage.",
+  "Avoid repeating the same explanation in feedback and grammarNotes. Put the main correction in feedback, and put the grammar rule in grammarNotes.",
+  "Keep feedback and grammarNotes concise and natural for Korean elementary students.",
+  "Be specific about the mistake and how to fix it.",
   "Do not only praise the student. If there is an error, clearly explain the main error.",
   "If the expression is already correct, say that there is no major error and suggest one small way to make it more natural.",
   "Return only strict JSON with correctedText:string, feedback:string, grammarNotes:string.",
@@ -48,7 +72,7 @@ function normalize(value: unknown, sentence: string) {
   };
 }
 
-async function reserveFeedbackAttempt({
+async function recordFeedbackAttempt({
   assignmentId,
   vocabularyItemId,
   studentId,
@@ -57,52 +81,15 @@ async function reserveFeedbackAttempt({
   vocabularyItemId: string;
   studentId: string;
 }) {
-  const client = await postgresPool.connect();
-  try {
-    await client.query("begin");
-    const result = await client.query<{ attempt_count: number }>(
-      `
-        select count(*)::int as attempt_count
-        from student_ai_feedback_attempts safa
-        where safa.assignment_id = $1
-          and safa.student_id = $2
-          and safa.assignment_vocabulary_item_id = $3
-          and safa.feedback_type = 'vocabulary_example'
-          and safa.created_at > coalesce(
-            (
-              select sub.submitted_at
-              from submissions sub
-              where sub.assignment_id = $1
-                and sub.student_id = $2
-              limit 1
-            ),
-            '-infinity'::timestamptz
-          )
-      `,
-      [assignmentId, studentId, vocabularyItemId],
-    );
-    const attemptCount = result.rows[0]?.attempt_count ?? 0;
-    if (attemptCount >= MAX_FEEDBACK_ATTEMPTS) {
-      await client.query("rollback");
-      return { ok: false };
-    }
-    await client.query(
-      `
-        insert into student_ai_feedback_attempts (
-          id, assignment_id, student_id, assignment_vocabulary_item_id, feedback_type
-        )
-        values ($1, $2, $3, $4, 'vocabulary_example')
-      `,
-      [`ai-feedback-attempt-${randomUUID()}`, assignmentId, studentId, vocabularyItemId],
-    );
-    await client.query("commit");
-    return { ok: true };
-  } catch (error) {
-    await client.query("rollback").catch(() => undefined);
-    throw error;
-  } finally {
-    client.release();
-  }
+  await postgresPool.query(
+    `
+      insert into student_ai_feedback_attempts (
+        id, assignment_id, student_id, assignment_vocabulary_item_id, feedback_type
+      )
+      values ($1, $2, $3, $4, 'vocabulary_example')
+    `,
+    [`ai-feedback-attempt-${randomUUID()}`, assignmentId, studentId, vocabularyItemId],
+  );
 }
 
 export async function POST(request: Request) {
@@ -133,13 +120,10 @@ export async function POST(request: Request) {
   requestHistory.set(session.studentId, now);
 
   try {
-    const attempt = await reserveFeedbackAttempt({ assignmentId, vocabularyItemId, studentId: session.studentId });
-    if (!attempt.ok) {
-      return NextResponse.json({ error: "AI 첨삭은 제출 1회당 최대 3번까지 받을 수 있습니다.", remainingAttempts: 0 }, { status: 429 });
-    }
+    await recordFeedbackAttempt({ assignmentId, vocabularyItemId, studentId: session.studentId });
   } catch (error) {
     console.error(error);
-    return NextResponse.json({ error: "AI 첨삭 횟수를 확인하지 못했습니다." }, { status: 500 });
+    return NextResponse.json({ error: "AI 첨삭 요청을 기록하지 못했습니다." }, { status: 500 });
   }
 
   const apiKey = process.env.OPENAI_API_KEY;
@@ -171,8 +155,8 @@ export async function POST(request: Request) {
               studentInput: sentence,
               outputRules: {
                 correctedText: "Correct only the student's input. Preserve its scope: word stays word, phrase stays phrase, sentence stays sentence.",
-                feedback: "Korean explanation for the student. Mention the main mistake and what improved.",
-                grammarNotes: "Korean notes focused on concrete grammar/expression fixes.",
+                feedback: "Korean-only explanation for the student. Do not use English explanatory sentences. Explain the main correction concisely. If a similar wrong word was used, explain the meaning difference in Korean.",
+                grammarNotes: "Korean-only notes focused on concrete grammar/expression fixes. Always include at least one specific grammar or expression point. For phrases/sentences, pay special attention to common Korean-learner errors such as articles, singular/plural nouns, subject-verb agreement, be-verbs, tense, word order, prepositions, pronouns, countable vs uncountable nouns, capitalization, punctuation, and adjective/adverb use. If an article is added, removed, or changed, explain why a/an/the or no article is correct in Korean elementary-student language. For words, mention spelling, meaning, part of speech, singular/plural, or usage. Choose only the most relevant one or two points and do not repeat the feedback.",
               },
             }),
           },

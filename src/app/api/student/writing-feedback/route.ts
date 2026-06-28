@@ -17,9 +17,29 @@ type WritingFeedbackResponse = {
 
 const MIN_ANSWER_LENGTH = 8;
 const MAX_ANSWER_LENGTH = 6000;
-const MAX_FEEDBACK_ATTEMPTS = 3;
 const requestHistory = new Map<string, number>();
 const RATE_LIMIT_MS = 8000;
+const WRITING_FEEDBACK_SYSTEM_PROMPT = [
+  "You are a warm but precise English writing teacher who teaches Korean elementary students.",
+  "Assume the student is learning English grammar from a Korean-language perspective, so explain grammar concepts in clear Korean at an elementary level.",
+  "Correct the student's English writing while keeping the student's original idea and level.",
+  "Do not make the writing too advanced. Prefer simple, natural elementary-level English.",
+  "Correct grammar, word order, capitalization, punctuation, articles, prepositions, verb tense, subject-verb agreement, pronouns, singular/plural nouns, be-verbs, countable vs uncountable nouns, and adjective/adverb use when relevant.",
+  "Pay special attention to English grammar points Korean learners commonly miss because Korean works differently.",
+  "When the student's article choice is missing or incorrect, explain why the correction uses a/an/the or no article.",
+  "When explaining articles, distinguish indefinite articles a/an from the definite article the in Korean: a/an introduces one non-specific countable noun, while the points to a specific noun already known from context.",
+  "For a/an, explain the sound-based choice when relevant: use a before consonant sounds and an before vowel sounds.",
+  "For singular countable common nouns, use an appropriate article or determiner unless the noun is plural, uncountable, or a proper noun.",
+  "Do not claim that a singular countable common noun can normally stand alone without an article.",
+  "If a target prompt, instruction, hint, example, or picture context is provided, use it to understand the student's intent, but do not invent unrelated content.",
+  "Write feedback, grammarNotes, and expressionNotes in Korean only.",
+  "Do not write English explanation sentences in feedback, grammarNotes, or expressionNotes.",
+  "English may appear only as corrected writing or as short quoted vocabulary/expression labels.",
+  "Avoid repeating the same explanation in feedback and grammarNotes. Put the main correction in feedback, and put grammar rules in grammarNotes.",
+  "grammarNotes must include the most relevant one or two grammar points, not every possible issue.",
+  "expressionNotes may include one or two useful natural expressions, but explain them in Korean.",
+  "Return only strict JSON with correctedText:string, feedback:string, grammarNotes:string[], expressionNotes:string[].",
+].join(" ");
 
 function toStringArray(value: unknown): string[] {
   if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
@@ -41,9 +61,8 @@ function fallbackFeedback(answerText: string, raw?: unknown): WritingFeedbackRes
       "시제와 주어/동사가 자연스럽게 이어지는지 다시 읽어보세요.",
     ],
     expressionNotes: [
-      "I can see...",
-      "It looks like...",
-      "I think ... because ...",
+      "사진을 설명할 때는 보이는 것을 먼저 말하고, 이유를 덧붙이면 글이 자연스러워져요.",
+      "생각을 말할 때는 이유를 함께 쓰면 더 완성된 문장이 됩니다.",
     ],
     raw,
     isFallback: true,
@@ -80,7 +99,7 @@ function parseAiJson(text: string, answerText: string): WritingFeedbackResponse 
   }
 }
 
-async function reserveFeedbackAttempt({
+async function recordFeedbackAttempt({
   assignmentId,
   assignmentItemId,
   studentId,
@@ -89,52 +108,15 @@ async function reserveFeedbackAttempt({
   assignmentItemId: string;
   studentId: string;
 }) {
-  const client = await postgresPool.connect();
-  try {
-    await client.query("begin");
-    const result = await client.query<{ attempt_count: number }>(
-      `
-        select count(*)::int as attempt_count
-        from student_ai_feedback_attempts safa
-        where safa.assignment_id = $1
-          and safa.student_id = $2
-          and safa.assignment_item_id = $3
-          and safa.feedback_type = 'writing'
-          and safa.created_at > coalesce(
-            (
-              select sub.submitted_at
-              from submissions sub
-              where sub.assignment_id = $1
-                and sub.student_id = $2
-              limit 1
-            ),
-            '-infinity'::timestamptz
-          )
-      `,
-      [assignmentId, studentId, assignmentItemId],
-    );
-    const attemptCount = result.rows[0]?.attempt_count ?? 0;
-    if (attemptCount >= MAX_FEEDBACK_ATTEMPTS) {
-      await client.query("rollback");
-      return { ok: false, remainingAttempts: 0 };
-    }
-    await client.query(
-      `
-        insert into student_ai_feedback_attempts (
-          id, assignment_id, student_id, assignment_item_id, feedback_type
-        )
-        values ($1, $2, $3, $4, 'writing')
-      `,
-      [`ai-feedback-attempt-${randomUUID()}`, assignmentId, studentId, assignmentItemId],
-    );
-    await client.query("commit");
-    return { ok: true, remainingAttempts: Math.max(MAX_FEEDBACK_ATTEMPTS - attemptCount - 1, 0) };
-  } catch (error) {
-    await client.query("rollback").catch(() => undefined);
-    throw error;
-  } finally {
-    client.release();
-  }
+  await postgresPool.query(
+    `
+      insert into student_ai_feedback_attempts (
+        id, assignment_id, student_id, assignment_item_id, feedback_type
+      )
+      values ($1, $2, $3, $4, 'writing')
+    `,
+    [`ai-feedback-attempt-${randomUUID()}`, assignmentId, studentId, assignmentItemId],
+  );
 }
 
 export async function POST(request: Request) {
@@ -178,13 +160,10 @@ export async function POST(request: Request) {
   requestHistory.set(session.studentId, now);
 
   try {
-    const attempt = await reserveFeedbackAttempt({ assignmentId, assignmentItemId, studentId: session.studentId });
-    if (!attempt.ok) {
-      return NextResponse.json({ error: "AI 첨삭은 제출 1회당 최대 3번까지 받을 수 있습니다.", remainingAttempts: 0 }, { status: 429 });
-    }
+    await recordFeedbackAttempt({ assignmentId, assignmentItemId, studentId: session.studentId });
   } catch (error) {
     console.error(error);
-    return NextResponse.json({ error: "AI 첨삭 횟수를 확인하지 못했습니다." }, { status: 500 });
+    return NextResponse.json({ error: "AI 첨삭 요청을 기록하지 못했습니다." }, { status: 500 });
   }
 
   const apiKey = process.env.OPENAI_API_KEY;
@@ -205,12 +184,28 @@ export async function POST(request: Request) {
         messages: [
           {
             role: "system",
-            content:
-              "You are a kind English writing teacher for elementary students. Correct the writing without making it too advanced. Return strict JSON with correctedText:string, feedback:string, grammarNotes:string[], expressionNotes:string[].",
+            content: WRITING_FEEDBACK_SYSTEM_PROMPT,
           },
           {
             role: "user",
-            content: JSON.stringify({ writingMode, writingUnit, promptText, writingInstructions, writingHint, writingExample, answerText }),
+            content: JSON.stringify({
+              task: "Correct the student's English writing and explain the main grammar/expression issues in Korean.",
+              writingContext: {
+                writingMode,
+                writingUnit,
+                promptText,
+                writingInstructions,
+                writingHint,
+                writingExample,
+              },
+              studentWriting: answerText,
+              outputRules: {
+                correctedText: "A corrected English version that preserves the student's idea and level.",
+                feedback: "Korean-only concise explanation of the main correction. Do not use English explanatory sentences.",
+                grammarNotes: "Korean-only notes. Choose the most relevant one or two grammar points, especially common Korean-learner errors such as articles, singular/plural, be-verbs, tense, word order, prepositions, and punctuation.",
+                expressionNotes: "Korean-only notes with one or two useful natural-expression suggestions when helpful.",
+              },
+            }),
           },
         ],
       }),

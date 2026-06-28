@@ -45,21 +45,20 @@ export function WritingHomework({ assignment, partMode, draftData }: { assignmen
       : null),
   );
   const [hasReceivedAiFeedback, setHasReceivedAiFeedback] = useState(Boolean(draftData?.hasReceivedAiFeedback) || Boolean(draftAiResult) || Boolean(item?.aiCorrectedText));
-  const [aiFeedbackAttempts, setAiFeedbackAttempts] = useState(typeof draftData?.aiFeedbackAttempts === "number" ? draftData.aiFeedbackAttempts : 0);
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
   const [error, setError] = useState("");
   const [alertMessage, setAlertMessage] = useState("");
   const [pending, startTransition] = useTransition();
 
-  const canRequestAiFeedback = answerText.trim().length > 0 && aiFeedbackAttempts < 3 && !pending;
-  const canSubmit = hasReceivedAiFeedback && revisedText.trim().length > 0 && aiResult !== null && !pending;
-  const submitDisabledReason = !hasReceivedAiFeedback || !aiResult
-    ? "AI 첨삭을 먼저 받은 뒤 제출할 수 있습니다."
-    : !revisedText.trim()
-      ? "AI 첨삭을 보고 다시 쓰는 글을 작성해주세요."
-      : undefined;
+  const canRequestAiFeedback = answerText.trim().length > 0 && !pending;
+  const canSubmit = answerText.trim().length > 0 && !pending;
+  const submitDisabledReason = !answerText.trim() ? "작성한 글을 먼저 입력해주세요." : undefined;
   const promptText = item?.promptText || item?.passageText || "";
+
+  function finalAnswerText() {
+    return revisedText.trim() || aiResult?.correctedText.trim() || answerText.trim();
+  }
 
   function requestFeedback() {
     if (!item || !canRequestAiFeedback) return;
@@ -81,7 +80,6 @@ export function WritingHomework({ assignment, partMode, draftData }: { assignmen
           answerText,
         });
         setAiResult(result);
-        setAiFeedbackAttempts((value) => Math.min(value + 1, 3));
         setHasReceivedAiFeedback(true);
         setRevisedText("");
         window.setTimeout(() => revisedTextRef.current?.focus(), 0);
@@ -94,7 +92,7 @@ export function WritingHomework({ assignment, partMode, draftData }: { assignmen
   }
 
   function confirmSubmit() {
-    if (!item || !aiResult || !canSubmit) return;
+    if (!item || !canSubmit) return;
     setError("");
     startTransition(async () => {
       try {
@@ -110,12 +108,12 @@ export function WritingHomework({ assignment, partMode, draftData }: { assignmen
           writingExample: item.writingExample,
           imageUrl: assignment.imageUrl,
           originalAnswerText: answerText,
-          answerText: revisedText,
-          aiCorrectedText: aiResult.correctedText,
-          aiFeedback: aiResult.feedback,
-          aiGrammarNotes: aiResult.grammarNotes.join("\n"),
-          aiExpressionNotes: aiResult.expressionNotes.join("\n"),
-          aiFeedbackRaw: aiResult.raw,
+          answerText: finalAnswerText(),
+          aiCorrectedText: aiResult?.correctedText,
+          aiFeedback: aiResult?.feedback,
+          aiGrammarNotes: aiResult?.grammarNotes.join("\n"),
+          aiExpressionNotes: aiResult?.expressionNotes.join("\n"),
+          aiFeedbackRaw: aiResult?.raw,
         });
         setIsSubmitModalOpen(false);
         router.replace(`/student/assignments/${assignment.id}/complete`);
@@ -126,14 +124,13 @@ export function WritingHomework({ assignment, partMode, draftData }: { assignmen
   }
 
   function savePart() {
-    if (!partMode || !aiResult || !canSubmit) return;
+    if (!partMode || !canSubmit) return;
     partMode.onSave({
       data: {
         answerText,
-        revisedText,
-        aiResult,
+        revisedText: finalAnswerText(),
+        aiResult: aiResult ?? undefined,
         hasReceivedAiFeedback,
-        aiFeedbackAttempts,
       },
     });
   }
@@ -242,10 +239,10 @@ export function WritingHomework({ assignment, partMode, draftData }: { assignmen
           </div>
         )}
 
-        <p className="mt-4 text-sm font-semibold text-slate-500">AI 첨삭 가능 횟수: {Math.max(3 - aiFeedbackAttempts, 0)} / 3</p>
+        <p className="mt-4 text-sm font-semibold text-slate-500">AI 첨삭은 필요할 때 받을 수 있습니다. 첨삭 없이도 제출할 수 있습니다.</p>
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
           <Button type="button" variant="secondary" disabled={!canRequestAiFeedback} onClick={requestFeedback} className="min-h-12 text-base">
-            {aiFeedbackAttempts >= 3 ? "첨삭 3회 완료" : hasReceivedAiFeedback ? "AI 첨삭 다시 받기" : "AI 첨삭받기"}
+            {hasReceivedAiFeedback ? "AI 첨삭 다시 받기" : "AI 첨삭받기"}
           </Button>
           <ReadyStepButton
             disabled={!canSubmit}
@@ -253,7 +250,7 @@ export function WritingHomework({ assignment, partMode, draftData }: { assignmen
             onDisabledClick={setAlertMessage}
             onClick={partMode ? savePart : () => setIsSubmitModalOpen(true)}
             className="min-h-12 text-base"
-            tooltip={partMode ? partMode.tooltip ?? "수정본 작성이 끝났어요. 저장할 수 있어요." : "수정본 작성이 끝났어요. 제출할 수 있어요."}
+            tooltip={partMode ? partMode.tooltip ?? "작성한 글을 저장할 수 있어요." : "작성한 글을 제출할 수 있어요."}
           >
             {partMode ? partMode.label ?? "저장하기" : "제출하기"}
           </ReadyStepButton>
