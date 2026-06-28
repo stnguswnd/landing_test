@@ -60,24 +60,46 @@ export function VocabularyExampleHomework({ assignment, partMode, draftData }: {
 
   const currentWord = vocabularyItems[currentIndex];
   const currentState = currentWord ? states[currentWord.id] : undefined;
-  const allReady = vocabularyItems.length > 0 && vocabularyItems.every((word) => states[word.id]?.reviewed && states[word.id]?.revisedAnswerText.trim());
+  const allReady = vocabularyItems.length > 0 && vocabularyItems.every((word) => states[word.id]?.originalAnswerText.trim());
   const isLast = currentIndex === vocabularyItems.length - 1;
   const canRequestFeedback = Boolean(currentState?.originalAnswerText.trim()) && (currentState?.aiFeedbackAttempts ?? 0) < 3 && !pending;
 
-  const instruction = item?.passageText || "Write a sentence using a given vocabulary.";
+  const instruction = item?.passageText || "Write a word, phrase, or sentence using the vocabulary.";
   const progressText = useMemo(() => `${Math.min(currentIndex + 1, vocabularyItems.length)} / ${vocabularyItems.length}`, [currentIndex, vocabularyItems.length]);
   const currentDisabledReason = !currentState?.originalAnswerText.trim()
-    ? "문장을 먼저 작성해주세요."
-    : !currentState?.reviewed
-      ? "AI 첨삭을 먼저 받은 뒤 다음으로 넘어갈 수 있습니다."
-      : !currentState?.revisedAnswerText.trim()
-        ? "첨삭을 보고 다시 쓰기를 작성해주세요."
-        : undefined;
-  const submitDisabledReason = !allReady ? "모든 단어의 AI 첨삭과 다시 쓰기를 완료해주세요." : undefined;
+    ? "단어, 표현, 문장 중 하나를 먼저 작성해주세요."
+    : undefined;
+  const submitDisabledReason = !allReady ? "모든 단어에 답을 작성해주세요." : undefined;
 
   function updateCurrent(patch: Partial<WordState>) {
     if (!currentWord) return;
     setStates((current) => ({ ...current, [currentWord.id]: { ...current[currentWord.id], ...patch } }));
+  }
+
+  function normalizedStatesForSave() {
+    const nextStates: Record<string, WordState> = {};
+    for (const word of vocabularyItems) {
+      const state = states[word.id];
+      if (!state) continue;
+      nextStates[word.id] = {
+        ...state,
+        revisedAnswerText: state.revisedAnswerText.trim() || state.aiCorrectedText.trim() || state.originalAnswerText,
+      };
+    }
+    return nextStates;
+  }
+
+  function saveCurrentAndMoveNext() {
+    if (!currentWord || !currentState?.originalAnswerText.trim()) return;
+    const fallbackRevisedAnswer = currentState.revisedAnswerText.trim() || currentState.aiCorrectedText.trim() || currentState.originalAnswerText;
+    setStates((current) => ({
+      ...current,
+      [currentWord.id]: {
+        ...current[currentWord.id],
+        revisedAnswerText: fallbackRevisedAnswer,
+      },
+    }));
+    setCurrentIndex((value) => Math.min(value + 1, vocabularyItems.length - 1));
   }
 
   function requestFeedback() {
@@ -117,14 +139,15 @@ export function VocabularyExampleHomework({ assignment, partMode, draftData }: {
   function submit() {
     if (!item || !allReady) return;
     startTransition(async () => {
+      const normalizedStates = normalizedStatesForSave();
       const answers = vocabularyItems.map((word) => ({
         assignmentVocabularyItemId: word.id,
-        originalAnswerText: states[word.id].originalAnswerText,
-        aiCorrectedText: states[word.id].aiCorrectedText,
-        aiFeedback: states[word.id].aiFeedback,
-        aiGrammarNotes: states[word.id].aiGrammarNotes,
-        aiFeedbackRaw: states[word.id].aiFeedbackRaw,
-        revisedAnswerText: states[word.id].revisedAnswerText,
+        originalAnswerText: normalizedStates[word.id].originalAnswerText,
+        aiCorrectedText: normalizedStates[word.id].aiCorrectedText,
+        aiFeedback: normalizedStates[word.id].aiFeedback,
+        aiGrammarNotes: normalizedStates[word.id].aiGrammarNotes,
+        aiFeedbackRaw: normalizedStates[word.id].aiFeedbackRaw,
+        revisedAnswerText: normalizedStates[word.id].revisedAnswerText,
       }));
       const response = await fetch("/api/student/submissions/vocabulary-example", {
         method: "POST",
@@ -142,7 +165,7 @@ export function VocabularyExampleHomework({ assignment, partMode, draftData }: {
 
   function savePart() {
     if (!partMode || !allReady) return;
-    partMode.onSave({ data: { states, currentIndex } });
+    partMode.onSave({ data: { states: normalizedStatesForSave(), currentIndex } });
   }
 
   if (!currentWord || !currentState) {
@@ -177,11 +200,11 @@ export function VocabularyExampleHomework({ assignment, partMode, draftData }: {
 
       <Card>
         <label className="grid gap-2 text-sm font-bold">
-          문장 작성
+          단어/표현 작성
           <Textarea
             value={currentState.originalAnswerText}
             onChange={(event) => updateCurrent({ originalAnswerText: event.target.value })}
-            placeholder="Write a sentence."
+            placeholder="Write a word, phrase, or sentence."
             className="min-h-[140px] text-base"
           />
         </label>
@@ -234,11 +257,11 @@ export function VocabularyExampleHomework({ assignment, partMode, draftData }: {
             </ReadyStepButton>
           ) : (
             <ReadyStepButton
-              disabled={!currentState.reviewed || !currentState.revisedAnswerText.trim()}
+              disabled={!currentState.originalAnswerText.trim()}
               disabledReason={currentDisabledReason}
               onDisabledClick={setAlertMessage}
-              onClick={() => setCurrentIndex((value) => Math.min(value + 1, vocabularyItems.length - 1))}
-              tooltip="첨삭 확인과 다시 쓰기가 끝났어요. 다음 단어로 넘어갈 수 있어요."
+              onClick={saveCurrentAndMoveNext}
+              tooltip="작성한 답을 저장하고 다음 단어로 넘어갈 수 있어요."
             >
               다음 단어
             </ReadyStepButton>

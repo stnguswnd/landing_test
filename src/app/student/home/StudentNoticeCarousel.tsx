@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 import { Badge } from "@/components/ui/Badge";
@@ -30,7 +31,7 @@ export function StudentNoticeCarousel({ notices }: { notices: StudentNotice[] })
   }
 
   return (
-    <section className="student-section">
+    <section id="notice" className="student-section">
       <div className="mb-5 flex items-end justify-between gap-4">
         <div>
           <Badge tone="green">Notice</Badge>
@@ -47,22 +48,30 @@ export function StudentNoticeCarousel({ notices }: { notices: StudentNotice[] })
         <Card className="p-4 md:p-5">
           <div className="grid gap-4 lg:grid-cols-2">
             {visibleNotices.map((notice) => (
-              <article key={`${notice.id}-${index}`} className="grid min-h-[210px] overflow-hidden rounded-[18px] border border-line bg-white md:grid-cols-[190px_1fr]">
-                {notice.imageUrl ? (
-                  <img src={notice.imageUrl} alt="" className="h-44 w-full object-cover md:h-full" />
-                ) : (
-                  <div className="grid h-40 place-items-center bg-[#e8f6eb] text-sm font-bold text-[#14532d] md:h-full">Notice</div>
-                )}
+              <Link
+                key={`${notice.id}-${index}`}
+                href={`/student/notices/${notice.id}`}
+                className="group grid min-h-[210px] overflow-hidden rounded-[18px] border border-line bg-white transition hover:-translate-y-0.5 hover:border-[#178341]/30 hover:shadow-soft md:grid-cols-[190px_1fr]"
+                aria-label={`${notice.title} 공지 자세히 보기`}
+              >
+                <article className="contents">
+                  {notice.imageUrl ? (
+                    <img src={notice.imageUrl} alt="" className="h-44 w-full object-cover md:h-full" />
+                  ) : (
+                    <div className="grid h-40 place-items-center bg-[#e8f6eb] text-sm font-bold text-[#14532d] md:h-full">Notice</div>
+                  )}
 
-                <div className="flex min-w-0 flex-col p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="text-xs font-bold text-[#5b655d]">{formatDate(notice.createdAt)}</p>
-                    <Badge tone={notice.targetType === "all" ? "blue" : "green"}>{notice.targetType === "all" ? "전체" : "반"}</Badge>
+                  <div className="flex min-w-0 flex-col p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-xs font-bold text-[#5b655d]">{formatDate(notice.createdAt)}</p>
+                      <Badge tone={notice.targetType === "all" ? "blue" : "green"}>{notice.targetType === "all" ? "전체" : "반"}</Badge>
+                    </div>
+                    <h2 className="mt-2 truncate text-lg font-bold group-hover:text-[#14532d]">{notice.title}</h2>
+                    <p className="mt-2 line-clamp-3 leading-7 text-[#5b655d]">{notice.content}</p>
+                    <span className="mt-auto pt-3 text-sm font-bold text-[#14532d]">자세히 보기</span>
                   </div>
-                  <h2 className="mt-2 truncate text-lg font-bold">{notice.title}</h2>
-                  <p className="mt-2 line-clamp-3 leading-7 text-[#5b655d]">{notice.content}</p>
-                </div>
-              </article>
+                </article>
+              </Link>
             ))}
           </div>
 

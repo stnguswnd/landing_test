@@ -535,6 +535,30 @@ export async function getStudentVisibleNotices(studentId: string, teacherId: str
   return result.rows.map(normalizeNotice);
 }
 
+export async function getStudentVisibleNotice(studentId: string, teacherId: string, noticeId: string) {
+  const result = await query(
+    `
+      select distinct n.*, nt.target_type, nt.class_id
+      from notices n
+      join notice_targets nt on nt.notice_id = n.id
+      left join class_memberships cm on cm.class_id = nt.class_id
+      left join classes c on c.id = nt.class_id and c.teacher_id = n.teacher_id and c.status = 'active'
+      where n.id = $3
+        and n.teacher_id = $2
+        and n.status = 'published'
+        and (
+          nt.target_type = 'all'
+          or (nt.target_type = 'class' and cm.student_id = $1 and c.id is not null)
+          or (nt.target_type = 'student' and nt.student_id = $1)
+        )
+      order by n.published_at desc nulls last, n.created_at desc
+      limit 1
+    `,
+    [studentId, teacherId, noticeId],
+  );
+  return result.rows[0] ? normalizeNotice(result.rows[0]) : null;
+}
+
 export async function getStudentCalendarEvents(studentId: string, teacherId: string, start: string, end: string) {
   const homework = await query(
     `
