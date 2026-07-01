@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 
 import { postgresPool } from "@/lib/postgres";
 import { requireTeacherSession } from "@/server/teacher/session";
@@ -69,6 +70,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ submi
     );
 
     await client.query("commit");
+
+    revalidatePath(`/teacher/students/${submission.student_id}`);
+    revalidatePath(`/teacher/submissions/${submissionId}`);
+    revalidatePath("/teacher/classes");
+    revalidatePath("/teacher/dashboard");
 
     return NextResponse.json({
       ok: true,

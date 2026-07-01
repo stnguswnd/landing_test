@@ -8,6 +8,7 @@ import { query } from "@/lib/postgres";
 import { assignmentTypeLabel as formatAssignmentTypeLabel } from "@/lib/assignmentTypes";
 import { getTeacherSession } from "@/server/teacher/session";
 import { SubmissionDeleteButton } from "./SubmissionDeleteButton";
+import { RefreshOnHistoryRestore } from "./RefreshOnHistoryRestore";
 import type {
   ManagedStudent,
   StudentLearningHistory,
@@ -271,6 +272,7 @@ export default async function StudentLearningHistoryPage({
 
   return (
     <TeacherLayout title={`${student.name} 학습 이력`}>
+      <RefreshOnHistoryRestore />
       <div className="grid gap-5">
         <Card>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
