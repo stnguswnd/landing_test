@@ -24,13 +24,13 @@ function completionCopy(type: string) {
   const normalized = normalizeAssignmentType(type);
   if (normalized === "listening") {
     return {
-      title: "리스닝 숙제를 완료했어요.",
+      title: "듣기 숙제를 완료했어요.",
       body: "선생님에게 숙제를 완료했다고 전달되었어요.",
     };
   }
   if (normalized === "writing") {
     return {
-      title: "라이팅 숙제를 제출했어요.",
+      title: "쓰기 숙제를 제출했어요.",
       body: "선생님이 글과 AI 첨삭 내용을 확인한 뒤 피드백을 줄 거예요.",
     };
   }
@@ -53,9 +53,9 @@ function completionCopy(type: string) {
 }
 
 function partTypeLabel(type?: string) {
-  if (type === "listening") return "리스닝";
+  if (type === "listening") return "듣기";
   if (type === "recording") return "녹음 제출";
-  if (type === "writing") return "라이팅";
+  if (type === "writing") return "쓰기";
   if (type === "photo_submission") return "사진 제출";
   if (type === "quiz") return "퀴즈";
   if (type === "vocabulary_example") return "단어 예문";
@@ -293,7 +293,7 @@ export default async function CompletePage({ params }: { params: Promise<{ assig
 
         {!isMultiPartSubmission && type === "writing" && (
           <Card>
-            <h2 className="text-lg font-bold">라이팅 제출 내용</h2>
+            <h2 className="text-lg font-bold">쓰기 제출 내용</h2>
             <div className="mt-4 grid gap-4 lg:grid-cols-2">
               <div className="rounded-lg border border-line p-4">
                 <p className="font-bold">학생 원문</p>

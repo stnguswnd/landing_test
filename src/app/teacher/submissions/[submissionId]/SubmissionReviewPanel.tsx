@@ -15,7 +15,7 @@ type SubmissionDetail = TeacherSubmissionDetail;
 type ReviewStatus = "reviewed" | "returned";
 
 function statusLabel(status: string) {
-  if (status === "reviewed" || status === "completed") return "완료";
+  if (status === "reviewed" || status === "completed") return "검토 완료";
   if (status === "returned") return "반려";
   if (status === "submitted" || status === "late") return "검토 대기";
   return status;
@@ -169,9 +169,9 @@ export function SubmissionReviewPanel({ detail }: { detail: SubmissionDetail }) 
 }
 
 function partTypeLabel(type?: string) {
-  if (type === "listening") return "리스닝";
+  if (type === "listening") return "듣기";
   if (type === "recording") return "녹음 제출";
-  if (type === "writing") return "라이팅";
+  if (type === "writing") return "쓰기";
   if (type === "photo_submission") return "사진 제출";
   if (type === "quiz") return "퀴즈";
   if (type === "vocabulary_example") return "단어 예문";
@@ -416,7 +416,7 @@ function RecordingReview({ items }: { items: SubmissionDetail["items"] }) {
 function ListeningReview({ submittedAt }: { submittedAt?: string }) {
   return (
     <Card>
-      <h3 className="text-lg font-bold">리스닝 완료 확인</h3>
+      <h3 className="text-lg font-bold">듣기 완료 확인</h3>
       <p className="mt-3 rounded-md bg-green-50 p-4 text-sm font-semibold text-green-800">
         학생이 음원을 끝까지 듣고 완료 처리했습니다.
       </p>

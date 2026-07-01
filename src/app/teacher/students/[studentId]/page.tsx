@@ -231,7 +231,7 @@ function submitStatusLabel(status: StudentLearningHistory["submitStatus"]) {
 
 function reviewStatusLabel(status: StudentLearningHistory["reviewStatus"]) {
   if (status === "pending") return "검토 필요";
-  if (status === "approved" || status === "reviewed") return "승인";
+  if (status === "approved" || status === "reviewed") return "검토 완료";
   if (status === "returned") return "반려";
   return "피드백 없음";
 }

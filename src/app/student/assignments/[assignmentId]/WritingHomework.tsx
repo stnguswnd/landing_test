@@ -118,7 +118,7 @@ export function WritingHomework({ assignment, partMode, draftData }: { assignmen
         setIsSubmitModalOpen(false);
         router.replace(`/student/assignments/${assignment.id}/complete`);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "라이팅 제출 중 오류가 발생했습니다.");
+        setError(err instanceof Error ? err.message : "쓰기 제출 중 오류가 발생했습니다.");
       }
     });
   }
@@ -140,7 +140,7 @@ export function WritingHomework({ assignment, partMode, draftData }: { assignmen
       <Card className="shadow-soft">
         <div className="flex flex-wrap gap-2">
           <Badge tone="blue">{assignment.classId || "내 반"}</Badge>
-          <Badge tone="green">Writing</Badge>
+          <Badge tone="green">쓰기</Badge>
           {assignment.dueAt && <Badge tone="yellow">마감: {formatDue(assignment.dueAt)}</Badge>}
           {assignment.submittedAt && <Badge tone="green">제출: {formatDateTime(assignment.submittedAt)}</Badge>}
         </div>
@@ -149,7 +149,7 @@ export function WritingHomework({ assignment, partMode, draftData }: { assignmen
       </Card>
 
       <Card>
-        <p className="text-sm font-bold text-action">Writing</p>
+        <p className="text-sm font-bold text-action">쓰기</p>
         <h2 className="mt-2 text-lg font-bold">{item ? writingInstruction(item) : "Write in English."}</h2>
       </Card>
 
@@ -157,7 +157,7 @@ export function WritingHomework({ assignment, partMode, draftData }: { assignmen
         <h2 className="font-bold">{item?.writingMode === "picture_description" ? "그림" : "주제"}</h2>
         {assignment.imageUrl && (
           <div className="mt-4 overflow-hidden rounded-lg border border-line bg-slate-50">
-            <img src={assignment.imageUrl} alt="라이팅 과제 이미지" className="h-auto w-full" />
+            <img src={assignment.imageUrl} alt="쓰기 과제 이미지" className="h-auto w-full" />
           </div>
         )}
         {promptText && (

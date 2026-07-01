@@ -15,10 +15,12 @@ type SubmissionStatusRow = {
   submitted_at: Date | null;
   due_at: Date | null;
   reviewed: boolean;
+  submission_status: string | null;
   submission_id: string | null;
   recording_url: string | null;
   recording_storage_path: string | null;
   teacher_comment: string | null;
+  feedback_id: string | null;
 };
 
 async function signedUrl(bucket: string, path: string | null) {
@@ -54,6 +56,7 @@ export async function GET(
         coalesce(sub.submitted_at, at.submitted_at) as submitted_at,
         coalesce(at.due_at, a.due_at) as due_at,
         at.reviewed,
+        sub.status as submission_status,
         sub.id as submission_id,
         (
           select si.recording_storage_path
@@ -69,22 +72,39 @@ export async function GET(
           order by si.created_at desc
           limit 1
         ) as recording_url,
-        sub.teacher_comment
+        sub.teacher_comment,
+        tf.id as feedback_id
       from assignment_targets at
       join students s on s.id = at.student_id and s.teacher_id = $2
       left join classes c on c.id = at.class_id and c.teacher_id = $2
-      left join submissions sub on sub.assignment_id = at.assignment_id and sub.student_id = at.student_id
+      left join lateral (
+        select sub.id, sub.status, sub.submitted_at, sub.teacher_comment
+        from submissions sub
+        where sub.assignment_id = at.assignment_id and sub.student_id = at.student_id
+        order by sub.submitted_at desc nulls last, sub.updated_at desc
+        limit 1
+      ) sub on true
+      left join teacher_feedback tf on tf.submission_id = sub.id and tf.teacher_id = $2
       left join assignments a on a.id = at.assignment_id and a.teacher_id = $2
       where at.assignment_id = $1
         and at.status <> 'cancelled'
-      group by s.id, at.id, a.due_at, sub.id
+      group by s.id, at.id, a.due_at, sub.id, sub.status, sub.submitted_at, sub.teacher_comment, tf.id
       order by s.name asc
     `,
     [assignmentId, teacherId],
   );
 
   const rows = await Promise.all(
-    result.rows.map(async (row) => ({
+    result.rows.map(async (row) => {
+      const submitted = Boolean(row.submitted_at || ["submitted", "late"].includes(row.target_status));
+      const reviewStatus = !submitted
+        ? "none"
+        : row.submission_status === "returned"
+          ? "returned"
+          : row.submission_status === "reviewed" || row.reviewed || row.feedback_id
+            ? "reviewed"
+            : "pending";
+      return {
       studentId: row.student_id,
       studentName: row.student_name,
       classNames: row.class_names ?? [],
@@ -93,10 +113,12 @@ export async function GET(
       dueAt: row.due_at?.toISOString() ?? null,
       isLate: Boolean(row.submitted_at && row.due_at && row.submitted_at.getTime() > row.due_at.getTime()),
       reviewed: row.reviewed,
+      reviewStatus,
       submissionId: row.submission_id,
       recordingUrl: (await signedUrl(storageBuckets.audio, row.recording_storage_path)) || row.recording_url,
       teacherComment: row.teacher_comment,
-    })),
+      };
+    }),
   );
 
   return NextResponse.json(rows);

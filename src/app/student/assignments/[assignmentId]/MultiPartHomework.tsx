@@ -27,7 +27,7 @@ function partTypeLabel(type: AssignmentPart["partType"]) {
   if (type === "instruction") return "설명";
   if (type === "listening") return "듣기 숙제";
   if (type === "recording") return "녹음 제출 숙제";
-  if (type === "writing") return "라이팅 숙제";
+  if (type === "writing") return "쓰기 숙제";
   if (type === "photo_submission") return "사진 제출 숙제";
   if (type === "quiz") return "퀴즈 숙제";
   if (type === "vocabulary_example") return "단어 예문 숙제";

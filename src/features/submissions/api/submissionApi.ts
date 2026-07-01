@@ -35,7 +35,7 @@ export async function completeListeningAssignment(assignmentId: string) {
 
   const data = await response.json();
   if (!response.ok) {
-    throw new Error(data.error ?? "리스닝 숙제 완료 처리 중 오류가 발생했습니다.");
+    throw new Error(data.error ?? "듣기 숙제 완료 처리 중 오류가 발생했습니다.");
   }
 
   return data as { submissionId: string; submittedAt: string; status: string };
@@ -126,7 +126,7 @@ export async function submitWritingAssignment(input: WritingFeedbackInput & {
   });
   const data = await response.json();
   if (!response.ok) {
-    throw new Error(data.error ?? "라이팅 제출 중 오류가 발생했습니다.");
+    throw new Error(data.error ?? "쓰기 제출 중 오류가 발생했습니다.");
   }
   return data as { submissionId: string; submittedAt: string; status: string };
 }

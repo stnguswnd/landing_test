@@ -33,7 +33,7 @@ export async function POST(request: Request) {
   const aiFeedbackRaw = body.aiFeedbackRaw ?? null;
 
   if (!assignmentId || !assignmentItemId || !answerText) {
-    return NextResponse.json({ error: "라이팅 제출 정보가 부족합니다." }, { status: 400 });
+    return NextResponse.json({ error: "쓰기 제출 정보가 부족합니다." }, { status: 400 });
   }
 
   const client = await postgresPool.connect();
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
 
     const row = target.rows[0];
     if (!row) {
-      return NextResponse.json({ error: "배정되지 않았거나 라이팅 숙제가 아닙니다." }, { status: 403 });
+      return NextResponse.json({ error: "배정되지 않았거나 쓰기 숙제가 아닙니다." }, { status: 403 });
     }
 
     const submissionId = row.submission_id ?? `submission-${randomUUID()}`;
@@ -123,7 +123,7 @@ export async function POST(request: Request) {
   } catch (error) {
     await client.query("rollback").catch(() => undefined);
     console.error(error);
-    return NextResponse.json({ error: "라이팅 제출 중 오류가 발생했습니다." }, { status: 500 });
+    return NextResponse.json({ error: "쓰기 제출 중 오류가 발생했습니다." }, { status: 500 });
   } finally {
     client.release();
   }

@@ -115,9 +115,9 @@ const SUPPORTED_AUDIO_EXTENSIONS = "mp3, m4a, wav, webm, ogg, oga, aac, aif, aif
 
 function partTypeLabel(type: AssignmentPartType) {
   if (type === "instruction") return "설명";
-  if (type === "listening") return "리스닝";
+  if (type === "listening") return "듣기";
   if (type === "recording") return "듣고녹음하기";
-  if (type === "writing") return "라이팅";
+  if (type === "writing") return "쓰기";
   if (type === "photo_submission") return "사진 제출";
   if (type === "quiz") return "퀴즈";
   if (type === "vocabulary_example") return "단어장 예문";
@@ -214,7 +214,7 @@ function partFieldCopy(type: AssignmentPartType) {
   if (type === "listening") {
     return {
       instructionLabel: "듣기 안내",
-      scriptLabel: "리스닝 스크립트",
+      scriptLabel: "듣기 스크립트",
       imageLabel: "참고 이미지",
       audioLabel: "원본 오디오 파일",
       helper: "학생은 오디오를 끝까지 듣고 이 Part를 저장합니다.",
@@ -233,11 +233,11 @@ function partFieldCopy(type: AssignmentPartType) {
   }
   if (type === "writing") {
     return {
-      instructionLabel: "라이팅 추가 지시문",
+      instructionLabel: "쓰기 추가 지시문",
       scriptLabel: "주제 / 프롬프트",
-      imageLabel: "라이팅 이미지",
+      imageLabel: "쓰기 이미지",
       audioLabel: "예시 오디오 파일",
-      helper: "기존 라이팅 숙제처럼 주제, 이미지, 지시문을 Part 안에 넣습니다.",
+      helper: "기존 쓰기 숙제처럼 주제, 이미지, 지시문을 Part 안에 넣습니다.",
       submitLabel: "작성 제출 수",
     };
   }
@@ -686,7 +686,7 @@ function validatePart(part: AssignmentPartState, index: number) {
     return `${prefix}: 읽고 녹음할 문장 또는 따라 말할 오디오 파일을 입력해주세요.`;
   }
   if (part.partType === "writing" && !part.scriptText.trim()) {
-    return `${prefix}: 라이팅 주제 / 프롬프트를 입력해주세요.`;
+    return `${prefix}: 쓰기 주제 / 프롬프트를 입력해주세요.`;
   }
   if (part.partType === "photo_submission" && !part.instruction.trim() && !part.scriptText.trim()) {
     return `${prefix}: 사진 제출 안내 또는 사진 설명을 입력해주세요.`;

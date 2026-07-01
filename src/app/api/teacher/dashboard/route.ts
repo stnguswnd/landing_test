@@ -62,10 +62,22 @@ export async function GET(request: NextRequest) {
           count(at.id)::int as total_assigned,
           count(at.id) filter (where at.status in ('submitted', 'late'))::int as submitted,
           count(at.id) filter (where at.status = 'assigned')::int as missing,
-          count(at.id) filter (where sub.id is not null and sub.status <> 'reviewed')::int as needs_review
+          count(at.id) filter (
+            where at.status in ('submitted', 'late')
+              and at.reviewed is not true
+              and coalesce(sub.status, '') not in ('reviewed', 'returned')
+              and tf.id is null
+          )::int as needs_review
         from assignment_targets at
         join assignments a on a.id = at.assignment_id and a.teacher_id = $1
-        left join submissions sub on sub.assignment_id = at.assignment_id and sub.student_id = at.student_id
+        left join lateral (
+          select sub.id, sub.status
+          from submissions sub
+          where sub.assignment_id = at.assignment_id and sub.student_id = at.student_id
+          order by sub.submitted_at desc nulls last, sub.updated_at desc
+          limit 1
+        ) sub on true
+        left join teacher_feedback tf on tf.submission_id = sub.id and tf.teacher_id = a.teacher_id
         where coalesce(at.due_at, a.due_at, a.created_at) >= $2::date
           and coalesce(at.due_at, a.due_at, a.created_at) < ($3::date + interval '1 day')
       `,
@@ -87,7 +99,8 @@ export async function GET(request: NextRequest) {
             at.status as target_status,
             at.reviewed as target_reviewed,
             sub.id as submission_id,
-            sub.status as submission_status
+            sub.status as submission_status,
+            tf.id as feedback_id
           from class_students cs
           left join assignment_targets at
             on at.student_id = cs.student_id
@@ -101,6 +114,7 @@ export async function GET(request: NextRequest) {
             order by sub.submitted_at desc nulls last, sub.updated_at desc
             limit 1
           ) sub on true
+          left join teacher_feedback tf on tf.submission_id = sub.id and tf.teacher_id = $1
           where a.id is null
              or (coalesce(at.due_at, a.due_at, a.created_at) >= $2::date
              and coalesce(at.due_at, a.due_at, a.created_at) < ($3::date + interval '1 day'))
@@ -115,7 +129,8 @@ export async function GET(request: NextRequest) {
           count(distinct ct.target_id) filter (
             where ct.target_status in ('submitted', 'late')
               and ct.target_reviewed is not true
-              and coalesce(ct.submission_status, '') <> 'reviewed'
+              and coalesce(ct.submission_status, '') not in ('reviewed', 'returned')
+              and ct.feedback_id is null
           )::int as needs_review_count
         from class_students cs
         left join class_targets ct on ct.class_id = cs.class_id

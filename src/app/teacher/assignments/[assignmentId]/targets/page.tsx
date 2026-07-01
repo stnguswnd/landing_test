@@ -28,6 +28,7 @@ type TargetStudent = {
   dueAt: string | null;
   detailHref: string | null;
   submissionStatus: "submitted" | "not_submitted";
+  reviewStatus: "none" | "pending" | "reviewed" | "returned";
   submittedAt: string | null;
 };
 
@@ -55,6 +56,9 @@ type TargetData = {
     assignedStudentCount: number;
     submittedCount: number;
     notSubmittedCount: number;
+    pendingReviewCount: number;
+    reviewedCount: number;
+    returnedCount: number;
   };
   groups: TargetGroup[];
 };
@@ -79,6 +83,20 @@ function statusLabel(status: string) {
   if (status === "closed") return "마감";
   if (status === "archived") return "보관됨";
   return status;
+}
+
+function reviewStatusLabel(status: TargetStudent["reviewStatus"]) {
+  if (status === "pending") return "검토 필요";
+  if (status === "reviewed") return "검토 완료";
+  if (status === "returned") return "반려";
+  return "-";
+}
+
+function reviewStatusTone(status: TargetStudent["reviewStatus"]): "green" | "yellow" | "red" | "gray" {
+  if (status === "pending") return "yellow";
+  if (status === "reviewed") return "green";
+  if (status === "returned") return "red";
+  return "gray";
 }
 
 export default function AssignmentTargetsPage() {
@@ -294,12 +312,13 @@ export default function AssignmentTargetsPage() {
 
       <Card className="mb-4">
         <h2 className="text-xl font-bold">{data?.assignment.title ?? "숙제를 불러오는 중입니다."}</h2>
-        <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-7">
           <SummaryChip label="과목 / 유형" value={data ? `${data.assignment.subject} · ${data.assignment.typeLabel}` : "-"} />
           <SummaryChip label="배정 대상" value={data ? `${data.summary.classCount}개 반 · ${data.summary.assignedStudentCount}명` : "-"} />
           <SummaryChip label="제출 현황" value={data ? `제출 ${data.summary.submittedCount}/${data.summary.assignedStudentCount}명` : "-"} />
           <SummaryChip label="미제출" value={data ? `${data.summary.notSubmittedCount}명` : "-"} />
           <SummaryChip label="기본 마감" value={data?.assignment.defaultDueAt ? formatDue(data.assignment.defaultDueAt) : "-"} />
+          <SummaryChip label="검토 상태" value={data ? `대기 ${data.summary.pendingReviewCount}명 · 검토 완료 ${data.summary.reviewedCount}명` : "-"} />
           <SummaryChip label="공개 상태" value={data ? statusLabel(data.assignment.status) : "-"} />
         </div>
       </Card>
@@ -420,9 +439,9 @@ function SummaryChip({ label, value }: { label: string; value: string }) {
 function StudentTable({ students, selectedTargetIds, onToggle }: { students: TargetStudent[]; selectedTargetIds: string[]; onToggle: (targetId: string) => void }) {
   return (
     <div className="overflow-x-auto border-t border-line">
-      <table className="w-full min-w-[720px] text-left text-sm">
+      <table className="w-full min-w-[820px] text-left text-sm">
         <thead className="bg-slate-50 text-slate-500">
-          <tr><th className="w-10 px-3 py-2"></th><th className="px-3 py-2">학생명</th><th className="px-3 py-2">제출 상태</th><th className="px-3 py-2">제출 일시</th><th className="px-3 py-2">개별 마감일</th><th className="px-3 py-2">피드백</th></tr>
+          <tr><th className="w-10 px-3 py-2"></th><th className="px-3 py-2">학생명</th><th className="px-3 py-2">제출 상태</th><th className="px-3 py-2">검토 상태</th><th className="px-3 py-2">제출 일시</th><th className="px-3 py-2">개별 마감일</th><th className="px-3 py-2">피드백</th></tr>
         </thead>
         <tbody className="divide-y divide-line">
           {students.map((student) => (
@@ -430,6 +449,7 @@ function StudentTable({ students, selectedTargetIds, onToggle }: { students: Tar
               <td className="px-3 py-2"><input type="checkbox" checked={selectedTargetIds.includes(student.targetId)} onChange={() => onToggle(student.targetId)} /></td>
               <td className="px-3 py-2 font-semibold">{student.studentName}</td>
               <td className="px-3 py-2"><Badge tone={student.submissionStatus === "submitted" ? "green" : "gray"}>{student.submissionStatus === "submitted" ? "제출 완료" : "미제출"}</Badge></td>
+              <td className="px-3 py-2"><Badge tone={reviewStatusTone(student.reviewStatus)}>{reviewStatusLabel(student.reviewStatus)}</Badge></td>
               <td className="px-3 py-2">{student.submittedAt ? formatDue(student.submittedAt) : "-"}</td>
               <td className="px-3 py-2">{student.dueAt ? formatDue(student.dueAt) : "-"}</td>
               <td className="px-3 py-2">

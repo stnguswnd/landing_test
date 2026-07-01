@@ -74,8 +74,8 @@ function typeLabel(type: string) {
   if (type === "photo_submission") return "사진 제출";
   if (type === "vocabulary_example") return "단어장 예문";
   if (type === "vocabulary_recording") return "단어장 녹음";
-  if (type === "writing") return "라이팅";
-  if (type === "listening") return "리스닝";
+  if (type === "writing") return "쓰기";
+  if (type === "listening") return "듣기";
   return formatAssignmentTypeLabel(type);
 }
 

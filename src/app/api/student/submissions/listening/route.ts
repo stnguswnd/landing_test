@@ -64,7 +64,7 @@ export async function POST(request: Request) {
 
     const row = target.rows[0];
     if (!row) {
-      return NextResponse.json({ error: "배정되지 않았거나 리스닝 숙제가 아닙니다." }, { status: 403 });
+      return NextResponse.json({ error: "배정되지 않았거나 듣기 숙제가 아닙니다." }, { status: 403 });
     }
 
     const submissionId = row.submission_id ?? `submission-${randomUUID()}`;
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
   } catch (error) {
     await client.query("rollback").catch(() => undefined);
     console.error(error);
-    return NextResponse.json({ error: "리스닝 숙제 완료 처리 중 오류가 발생했습니다." }, { status: 500 });
+    return NextResponse.json({ error: "듣기 숙제 완료 처리 중 오류가 발생했습니다." }, { status: 500 });
   } finally {
     client.release();
   }

@@ -78,7 +78,7 @@ function dateOnly(value?: string | null) {
 }
 
 function todayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return toDateString(new Date());
 }
 
 function formatDate(value?: string | null) {
@@ -499,9 +499,8 @@ function OverviewTab({
   const [isNoticeOpen, setIsNoticeOpen] = useState(false);
   const [isTestOpen, setIsTestOpen] = useState(false);
   const [assignSubject, setAssignSubject] = useState<ClassSubject | null>(null);
-  const firstDate = events[0]?.eventDate ?? tests[0]?.testDate ?? assignments.find((assignment) => assignment.dueAt)?.dueAt ?? "2026-05-25";
-  const [selectedDate, setSelectedDate] = useState(dateOnly(firstDate));
-  const [displayMonth, setDisplayMonth] = useState(monthStart(firstDate));
+  const [selectedDate, setSelectedDate] = useState(todayDate);
+  const [displayMonth, setDisplayMonth] = useState(() => monthStart(todayDate()));
   const visibleEvents = events.filter((event) => event.status !== "hidden");
   const upcomingTests = tests
     .filter((test) => test.status !== "hidden")
@@ -1637,9 +1636,8 @@ function ClassSelectedDateSchedule({
 function ScheduleTab({ classId, events, tests, assignments, onChanged }: { classId: string; events: CalendarEvent[]; tests: TestRow[]; assignments: AssignmentRow[]; onChanged: (msg: string) => void }) {
   const [isOpen, setIsOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
-  const firstDate = events[0]?.eventDate ?? tests[0]?.testDate ?? assignments.find((assignment) => assignment.dueAt)?.dueAt ?? "2026-05-25";
-  const [selectedDate, setSelectedDate] = useState(dateOnly(firstDate));
-  const [displayMonth, setDisplayMonth] = useState(monthStart(firstDate));
+  const [selectedDate, setSelectedDate] = useState(todayDate);
+  const [displayMonth, setDisplayMonth] = useState(() => monthStart(todayDate()));
   const visibleEvents = events.filter((event) => event.status !== "hidden");
   const selectedEvents = visibleEvents.filter((event) => dateOnly(event.eventDate) === selectedDate);
   const selectedTests = tests.filter((test) => test.status !== "hidden" && dateOnly(test.testDate) === selectedDate);

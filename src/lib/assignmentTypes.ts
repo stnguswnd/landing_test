@@ -47,8 +47,8 @@ export function assignmentTypeLabel(value: string | null | undefined) {
   if (type === "vocabulary_recording") return "단어장 녹음";
   if (type === "photo_submission") return "사진 제출";
   if (type === "quiz") return "퀴즈";
-  if (type === "writing") return "라이팅";
-  if (type === "listening") return "리스닝";
+  if (type === "writing") return "쓰기";
+  if (type === "listening") return "듣기";
   return "듣고녹음하기";
 }
 
@@ -103,7 +103,7 @@ export function normalizeWritingUnit(value: string | null | undefined): WritingU
 export function writingModeLabel(value: string | null | undefined) {
   if (value === "topic_diary") return "주제/일기 쓰기";
   if (value === "picture_description") return "그림 묘사";
-  return "라이팅";
+  return "쓰기";
 }
 
 export function writingUnitLabel(value: string | null | undefined) {

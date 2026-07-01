@@ -162,8 +162,8 @@ export default function TeacherAssignmentPreviewPage() {
 
 function partTypeLabel(type: string) {
   if (type === "recording") return "듣고녹음하기";
-  if (type === "listening") return "리스닝";
-  if (type === "writing") return "라이팅";
+  if (type === "listening") return "듣기";
+  if (type === "writing") return "쓰기";
   if (type === "photo_submission") return "사진 제출";
   if (type === "quiz") return "퀴즈";
   if (type === "vocabulary_example") return "단어장 예문";
@@ -298,7 +298,7 @@ function PartPreviewCard({
       {part.partType === "writing" && (
         <div className="mt-4 grid gap-4">
           <Card className="border border-line shadow-none">
-            <p className="text-sm font-bold text-action">Writing</p>
+            <p className="text-sm font-bold text-action">쓰기</p>
             <h3 className="mt-2 font-bold">
               {isTopicDiary
                 ? `Write 4 ${isSentences ? "sentences" : "paragraphs"} about below.`
@@ -798,7 +798,7 @@ function WritingPreview({ assignment }: { assignment: TeacherAssignmentPreview }
   return (
     <div className="grid gap-4">
       <Header assignment={assignment} />
-      <Card><p className="text-sm font-bold text-action">Writing</p><h2 className="mt-2 text-lg font-bold">{instruction}</h2></Card>
+      <Card><p className="text-sm font-bold text-action">쓰기</p><h2 className="mt-2 text-lg font-bold">{instruction}</h2></Card>
       <Content assignment={assignment} promptText={promptText} />
       <Card>
         <label className="grid gap-2 text-sm font-bold">

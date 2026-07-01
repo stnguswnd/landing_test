@@ -25,6 +25,8 @@ type TargetRow = {
   submission_id: string | null;
   submitted_at: Date | null;
   submission_status: string | null;
+  target_reviewed: boolean | null;
+  feedback_id: string | null;
 };
 
 function toIso(value: Date | string | null) {
@@ -55,7 +57,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ass
         s.name as student_name,
         sub.id as submission_id,
         sub.submitted_at,
-        sub.status as submission_status
+        sub.status as submission_status,
+        at.reviewed as target_reviewed,
+        tf.id as feedback_id
       from assignments a
       left join assignment_targets at on at.assignment_id = a.id
         and at.status <> 'cancelled'
@@ -72,7 +76,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ass
       left join students s on s.id = at.student_id and s.teacher_id = a.teacher_id
       left join classes c on c.id = at.class_id and c.teacher_id = a.teacher_id and c.status = 'active'
       left join class_subjects cs on cs.id = at.class_subject_id and cs.teacher_id = a.teacher_id
-      left join submissions sub on sub.assignment_id = a.id and sub.student_id = at.student_id
+      left join lateral (
+        select sub.id, sub.submitted_at, sub.status
+        from submissions sub
+        where sub.assignment_id = a.id and sub.student_id = at.student_id
+        order by sub.submitted_at desc nulls last, sub.updated_at desc
+        limit 1
+      ) sub on true
+      left join teacher_feedback tf on tf.submission_id = sub.id and tf.teacher_id = a.teacher_id
       where a.id = $1
         and a.teacher_id = $2
       order by c.name nulls last, s.name
@@ -97,6 +108,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ass
       dueAt: string | null;
       detailHref: string | null;
       submissionStatus: "submitted" | "not_submitted";
+      reviewStatus: "none" | "pending" | "reviewed" | "returned";
       submittedAt: string | null;
     }>;
   }>();
@@ -112,6 +124,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ass
       students: [],
     };
     const submitted = Boolean(row.submitted_at || (row.submission_status && row.submission_status !== "not_submitted") || ["submitted", "late"].includes(row.target_status));
+    const reviewStatus = !submitted
+      ? "none"
+      : row.submission_status === "returned"
+        ? "returned"
+        : row.submission_status === "reviewed" || row.target_reviewed || row.feedback_id
+          ? "reviewed"
+          : "pending";
     group.students.push({
       studentId: row.student_id,
       studentName: row.student_name,
@@ -119,6 +138,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ass
       dueAt: toIso(row.target_due_at),
       detailHref: row.submission_id ? `/teacher/submissions/${row.submission_id}` : null,
       submissionStatus: submitted ? "submitted" : "not_submitted",
+      reviewStatus,
       submittedAt: toIso(row.submitted_at),
     });
     groups.set(classId, group);
@@ -133,6 +153,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ass
   const activeStudents = grouped.flatMap((group) => group.students);
   const normalizedType = normalizeAssignmentType(first.assignment_type);
   const submittedCount = activeStudents.filter((student) => student.submissionStatus === "submitted").length;
+  const pendingReviewCount = activeStudents.filter((student) => student.reviewStatus === "pending").length;
+  const reviewedCount = activeStudents.filter((student) => student.reviewStatus === "reviewed").length;
+  const returnedCount = activeStudents.filter((student) => student.reviewStatus === "returned").length;
 
   return NextResponse.json({
     assignment: {
@@ -149,6 +172,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ass
       assignedStudentCount: activeStudents.length,
       submittedCount,
       notSubmittedCount: Math.max(activeStudents.length - submittedCount, 0),
+      pendingReviewCount,
+      reviewedCount,
+      returnedCount,
     },
     groups: grouped,
   });

@@ -64,8 +64,8 @@ function HomeworkByType({ assignment }: { assignment: Assignment }) {
 function layoutTitle(assignment: Assignment) {
   const assignmentType = getCanonicalAssignmentType(assignment);
   if (assignmentType === "photo_submission") return "사진 제출 숙제";
-  if (assignmentType === "listening") return "리스닝 숙제";
-  if (assignmentType === "writing") return "라이팅 숙제";
+  if (assignmentType === "listening") return "듣기 숙제";
+  if (assignmentType === "writing") return "쓰기 숙제";
   if (assignmentType === "vocabulary_example") return "단어장 예문 숙제";
   if (assignmentType === "vocabulary_recording") return "단어장 녹음 숙제";
   if (assignmentType === "quiz") return "퀴즈 숙제";
