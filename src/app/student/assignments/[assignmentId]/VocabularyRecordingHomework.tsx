@@ -59,16 +59,42 @@ export function VocabularyRecordingHomework({ assignment, partMode, draftAttachm
       chunksRef.current = [];
       const recorder = new MediaRecorder(stream);
       recorderRef.current = recorder;
+
+      function fail(text: string) {
+        if (timerRef.current) window.clearInterval(timerRef.current);
+        timerRef.current = null;
+        stream.getTracks().forEach((track) => track.stop());
+        setMessage(text);
+        setRecordingStatus("idle");
+      }
+
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) chunksRef.current.push(event.data);
       };
+      recorder.onerror = () => fail("녹음 중 문제가 발생했어요. 다시 녹음해주세요.");
+      // 녹음 도중 마이크 스트림이 끊기면(전화 수신, 화면 잠금, 기기 분리 등) 녹음기를 정상 종료시켜
+      // 그때까지 버퍼된 데이터라도 onstop에서 안전하게 파일로 만들 수 있게 한다.
+      stream.getAudioTracks().forEach((track) => {
+        track.onended = () => {
+          if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+        };
+      });
       recorder.onstop = () => {
+        if (timerRef.current) window.clearInterval(timerRef.current);
+        timerRef.current = null;
+        stream.getTracks().forEach((track) => track.stop());
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        // 녹음이 중간에 깨져 데이터가 하나도 없으면 빈 파일이 제출되어 강사 피드백 단계에서
+        // "녹음 파일을 불러오지 못했습니다" 오류로 이어진다. 여기서 막고 다시 녹음하도록 안내한다.
+        if (blob.size === 0) {
+          setMessage("녹음이 정상적으로 저장되지 않았어요. 다시 녹음해주세요.");
+          setRecordingStatus("idle");
+          return;
+        }
         if (recordingUrl?.startsWith("blob:")) URL.revokeObjectURL(recordingUrl);
         setRecordingBlob(blob);
         setRecordingUrl(URL.createObjectURL(blob));
         setRecordingStatus("recorded");
-        stream.getTracks().forEach((track) => track.stop());
       };
       setRecordingSeconds(0);
       timerRef.current = window.setInterval(() => setRecordingSeconds((value) => value + 1), 1000);
