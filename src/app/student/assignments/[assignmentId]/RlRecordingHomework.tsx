@@ -190,7 +190,6 @@ export function RlRecordingHomework({ assignment, partMode, draftAttachments = [
                 formatSeconds={formatSeconds}
               />
               {recorder.previewUrl && recorder.state !== "recording" && <p className="mt-2 text-sm font-semibold text-action">녹음 완료</p>}
-              {recorder.errorMessage && <p className="mt-3 text-sm font-semibold text-danger">마이크 권한이 필요합니다.</p>}
             </div>
             {recorder.previewUrl && (
               <div className="mt-4">
@@ -247,8 +246,11 @@ export function RlRecordingHomework({ assignment, partMode, draftAttachments = [
           </div>
         </div>
       )}
-      {(error || alertMessage) && (
-        <SubmissionAlertModal message={error || alertMessage} onClose={() => { setError(""); setAlertMessage(""); }} />
+      {(error || alertMessage || recorder.errorMessage) && (
+        <SubmissionAlertModal
+          message={error || alertMessage || recorder.errorMessage || ""}
+          onClose={() => { setError(""); setAlertMessage(""); recorder.dismissError(); }}
+        />
       )}
     </div>
   );

@@ -81,7 +81,10 @@ export function useAudioRecorder() {
           setState("error");
           return;
         }
+        // 앞서 onerror가 먼저 발동했더라도, 여기서 유효한 파일을 만들었으면 살려낸 것이므로
+        // 에러 상태를 정리하고 성공으로 확정한다.
         const url = URL.createObjectURL(blob);
+        setErrorMessage(null);
         setRecordingBlob(blob);
         setPreviewUrl(url);
         setState("recorded");
@@ -111,13 +114,32 @@ export function useAudioRecorder() {
     setState("idle");
   }
 
+  function dismissError() {
+    setErrorMessage(null);
+    setState((prev) => (prev === "error" ? "idle" : prev));
+  }
+
   useEffect(() => {
-    return () => {
-      clearTimer();
-      revoke(previewUrl);
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-    };
+    return () => revoke(previewUrl);
   }, [previewUrl]);
 
-  return { state, recordingBlob, previewUrl, durationSec, errorMessage, startRecording, stopRecording, resetRecording };
+  useEffect(() => {
+    return () => {
+      // 언마운트 시: 녹음 중이면 핸들러를 떼고 정지시켜, 사라진 컴포넌트에서 상태가 갱신되거나
+      // 미완료 파일이 만들어지는 것을 막는다.
+      const recorder = recorderRef.current;
+      if (recorder) {
+        recorder.ondataavailable = null;
+        recorder.onstop = null;
+        recorder.onerror = null;
+        if (recorder.state === "recording") {
+          try { recorder.stop(); } catch { /* 이미 종료된 경우 무시 */ }
+        }
+      }
+      clearTimer();
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+    };
+  }, []);
+
+  return { state, recordingBlob, previewUrl, durationSec, errorMessage, startRecording, stopRecording, resetRecording, dismissError };
 }

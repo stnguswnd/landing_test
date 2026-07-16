@@ -44,13 +44,33 @@ export function VocabularyRecordingHomework({ assignment, partMode, draftAttachm
 
   useEffect(() => {
     return () => {
-      if (timerRef.current) window.clearInterval(timerRef.current);
-      streamRef.current?.getTracks().forEach((track) => track.stop());
       if (recordingUrl?.startsWith("blob:")) URL.revokeObjectURL(recordingUrl);
     };
   }, [recordingUrl]);
 
+  useEffect(() => {
+    return () => {
+      // 언마운트 시: 녹음 중이면 핸들러를 떼고 정지시켜, 사라진 컴포넌트에서 상태가 갱신되거나
+      // 미완료 파일이 만들어지는 것을 막는다.
+      const recorder = recorderRef.current;
+      if (recorder) {
+        recorder.ondataavailable = null;
+        recorder.onstop = null;
+        recorder.onerror = null;
+        if (recorder.state === "recording") {
+          try { recorder.stop(); } catch { /* 이미 종료된 경우 무시 */ }
+        }
+      }
+      if (timerRef.current) window.clearInterval(timerRef.current);
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+    };
+  }, []);
+
   async function startRecording() {
+    if (typeof MediaRecorder === "undefined") {
+      setMessage("이 브라우저는 녹음을 지원하지 않습니다.");
+      return;
+    }
     try {
       setMessage("");
       recordedAudioRef.current?.pause();
@@ -64,6 +84,10 @@ export function VocabularyRecordingHomework({ assignment, partMode, draftAttachm
         if (timerRef.current) window.clearInterval(timerRef.current);
         timerRef.current = null;
         stream.getTracks().forEach((track) => track.stop());
+        // 재녹음이 실패하면 이전 녹음을 남겨두지 않는다. (상태 idle인데 제출 버튼만 켜져 있는 엇갈림 방지)
+        if (recordingUrl?.startsWith("blob:")) URL.revokeObjectURL(recordingUrl);
+        setRecordingBlob(null);
+        setRecordingUrl(null);
         setMessage(text);
         setRecordingStatus("idle");
       }
@@ -87,11 +111,13 @@ export function VocabularyRecordingHomework({ assignment, partMode, draftAttachm
         // 녹음이 중간에 깨져 데이터가 하나도 없으면 빈 파일이 제출되어 강사 피드백 단계에서
         // "녹음 파일을 불러오지 못했습니다" 오류로 이어진다. 여기서 막고 다시 녹음하도록 안내한다.
         if (blob.size === 0) {
-          setMessage("녹음이 정상적으로 저장되지 않았어요. 다시 녹음해주세요.");
-          setRecordingStatus("idle");
+          fail("녹음이 정상적으로 저장되지 않았어요. 다시 녹음해주세요.");
           return;
         }
+        // 앞서 onerror가 먼저 발동했더라도, 여기서 유효한 파일을 만들었으면 살려낸 것이므로
+        // 에러 메시지를 정리하고 성공으로 확정한다.
         if (recordingUrl?.startsWith("blob:")) URL.revokeObjectURL(recordingUrl);
+        setMessage("");
         setRecordingBlob(blob);
         setRecordingUrl(URL.createObjectURL(blob));
         setRecordingStatus("recorded");

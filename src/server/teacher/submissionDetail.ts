@@ -172,7 +172,8 @@ export type TeacherSubmissionDetail = {
 async function signedUrl(bucket: string, path: string | null) {
   if (!path) return "";
   const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60);
+  // 강사가 제출 상세 페이지를 열어둔 채로 시간이 지나도 재생이 끊기지 않도록 24시간 유효.
+  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60 * 24);
   return error ? "" : data.signedUrl;
 }
 
