@@ -97,7 +97,20 @@ function HomeworkByPart({
   label?: string;
   tooltip?: string;
 }) {
-  if (part.partType === "instruction") return <PartContent part={part} />;
+  if (part.partType === "instruction") {
+    return (
+      <div className="grid gap-4">
+        <PartContent part={part} />
+        {onSavePart && (
+          <div className="flex justify-end">
+            <Button type="button" onClick={() => onSavePart()}>
+              {label ?? "다음"}
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  }
   const assignmentType = assignmentTypeFromPartType(part.partType);
   const partMode = onSavePart ? { onSave: onSavePart, label, tooltip } : undefined;
   const draftData = (assignment.draft?.draftData?.[part.id] ?? undefined) as Record<string, unknown> | undefined;
@@ -261,7 +274,7 @@ export function MultiPartHomework({ assignment }: { assignment: Assignment }) {
                   index === currentIndex ? "border-action bg-action text-white" : "border-line bg-white text-slate-600"
                 }`}
               >
-                Part {index + 1} · {partTypeLabel(part.partType)}{savedParts.has(part.id) ? " 저장됨" : ""}
+                Part {index + 1} · {part.partType === "instruction" ? instructionKindLabel(part) : partTypeLabel(part.partType)}{savedParts.has(part.id) ? " 저장됨" : ""}
               </button>
             ))}
           </div>
@@ -290,7 +303,7 @@ export function MultiPartHomework({ assignment }: { assignment: Assignment }) {
           assignment={assignment}
           part={currentPart}
           onSavePart={saveAndSubmit}
-          label="제출하기"
+          label={currentPart.partType === "instruction" ? "확인하고 제출하기" : "제출하기"}
           tooltip="마지막 Part까지 완료했어요. 제출할 수 있습니다."
           photoFiles={photoFilesByPart[currentPart.id]}
           onPhotoFilesChange={(files) => updatePhotoFiles(currentPart.id, files)}
