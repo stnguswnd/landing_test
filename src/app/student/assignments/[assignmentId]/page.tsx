@@ -8,6 +8,7 @@ import type { Assignment } from "@/types/assignment";
 import { HomeworkListBackLink } from "./HomeworkListBackLink";
 import { ListeningHomework } from "./ListeningHomework";
 import { MultiPartHomework } from "./MultiPartHomework";
+import { MaterialHomework } from "./MaterialHomework";
 import { PhotoSubmissionHomework } from "./PhotoSubmissionHomework";
 import { QuizHomework } from "./QuizHomework";
 import { RlRecordingHomework } from "./RlRecordingHomework";
@@ -49,6 +50,7 @@ function HomeworkByType({ assignment }: { assignment: Assignment }) {
   const assignmentType = getCanonicalAssignmentType(effectiveAssignment);
   const activeParts = getActiveAssignmentParts(effectiveAssignment.parts);
 
+  if (assignmentType === "material") return <MaterialHomework assignment={effectiveAssignment} />;
   if (assignmentType === "photo_submission") return <PhotoSubmissionHomework assignment={{ ...effectiveAssignment, assignmentType }} />;
   if (assignmentType === "listening") return <ListeningHomework assignment={{ ...effectiveAssignment, assignmentType }} />;
   if (assignmentType === "writing") return <WritingHomework assignment={{ ...effectiveAssignment, assignmentType }} />;
@@ -63,6 +65,7 @@ function HomeworkByType({ assignment }: { assignment: Assignment }) {
 
 function layoutTitle(assignment: Assignment) {
   const assignmentType = getCanonicalAssignmentType(assignment);
+  if (assignmentType === "material") return "자료 보기";
   if (assignmentType === "photo_submission") return "사진 제출 숙제";
   if (assignmentType === "listening") return "듣기 숙제";
   if (assignmentType === "writing") return "쓰기 숙제";
@@ -90,7 +93,9 @@ export default async function StudentAssignmentPage({
   return (
     <StudentLayout title={layoutTitle(assignment)}>
       <HomeworkListBackLink />
-      {isMultipartAssignment(assignment)
+      {getCanonicalAssignmentType(assignment) === "material"
+        ? <MaterialHomework assignment={assignment} />
+        : isMultipartAssignment(assignment)
         ? <MultiPartHomework assignment={assignment} />
         : <HomeworkByType assignment={assignment} />}
     </StudentLayout>

@@ -61,6 +61,7 @@ type AssignmentPartRow = {
   id: string;
   assignment_id: string;
   part_type: string;
+  instruction_kind: "general" | "grading" | "other";
   title: string | null;
   instruction: string | null;
   script_text: string | null;
@@ -162,6 +163,7 @@ type AssignmentPartAttachmentRow = {
 type AssignmentPartInput = {
   id?: string;
   partType: string;
+  instructionKind: "general" | "grading" | "other";
   title: string;
   instruction: string;
   scriptText: string;
@@ -461,6 +463,7 @@ async function mapAssignment(row: AssignmentRow) {
       id: part.id,
       assignmentId: part.assignment_id,
       partType: part.part_type,
+      instructionKind: part.instruction_kind,
       title: part.title ?? "",
       instruction: part.instruction ?? "",
       scriptText: part.script_text ?? "",
@@ -544,6 +547,7 @@ async function getAssignmentRow(id: string, teacherId: string) {
                 'id', ap.id,
                 'assignment_id', ap.assignment_id,
                 'part_type', ap.part_type,
+                'instruction_kind', ap.instruction_kind,
                 'title', ap.title,
                 'instruction', ap.instruction,
                 'script_text', ap.script_text,
@@ -1299,6 +1303,7 @@ function parseQuizQuestions(value: unknown): QuizQuestionInput[] {
 }
 
 function partTypeForAssignmentType(type: string) {
+  if (type === "material") return "instruction";
   if (type === "listening") return "listening";
   if (type === "writing") return "writing";
   if (type === "photo_submission") return "photo_submission";
@@ -1329,6 +1334,7 @@ function defaultAssignmentPart(type: string, fallback: { title: string; instruct
   const partType = partTypeForAssignmentType(type);
   return {
     partType,
+    instructionKind: "general",
     title: fallback.title,
     instruction: fallback.instruction,
     scriptText: fallback.scriptText,
@@ -1360,6 +1366,7 @@ function parseAssignmentParts(
         return {
           id: typeof part.id === "string" && part.id.startsWith("assignment-part-") ? part.id : undefined,
           partType,
+          instructionKind: (part.instructionKind === "grading" || part.instructionKind === "other" ? part.instructionKind : "general") as AssignmentPartInput["instructionKind"],
           title: String(part.title ?? "").trim(),
           instruction: String(part.instruction ?? "").trim(),
           scriptText: String(part.scriptText ?? "").trim(),
@@ -1454,15 +1461,16 @@ async function syncAssignmentParts(client: PoolClient, assignmentId: string, par
     await client.query(
       `
         insert into assignment_parts (
-          id, assignment_id, part_type, title, instruction, script_text,
+          id, assignment_id, part_type, instruction_kind, title, instruction, script_text,
           writing_mode, writing_unit, writing_hint, writing_example,
           is_required, allow_submission, min_submission_count, max_submission_count,
           order_index, status, archived_at, archived_reason
         )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'active', null, null)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'active', null, null)
         on conflict (id)
         do update set
           part_type = excluded.part_type,
+          instruction_kind = excluded.instruction_kind,
           title = excluded.title,
           instruction = excluded.instruction,
           script_text = excluded.script_text,
@@ -1484,6 +1492,7 @@ async function syncAssignmentParts(client: PoolClient, assignmentId: string, par
         partId,
         assignmentId,
         part.partType,
+        part.instructionKind,
         part.title || null,
         part.instruction || null,
         part.scriptText || null,

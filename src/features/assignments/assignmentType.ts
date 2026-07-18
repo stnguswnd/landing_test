@@ -19,6 +19,7 @@ export function isMultipartAssignment(assignment: AssignmentLike): boolean {
 }
 
 export function assignmentTypeFromPartType(partType: AssignmentPart["partType"]): AssignmentType | undefined {
+  if (partType === "instruction") return "material";
   if (partType === "listening") return "listening";
   if (partType === "recording") return "listening_recording";
   if (partType === "writing") return "writing";

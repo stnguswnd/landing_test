@@ -97,6 +97,7 @@ type AssignmentPartRow = {
   id: string;
   assignment_id: string;
   part_type: "instruction" | "listening" | "recording" | "writing" | "photo_submission" | "vocabulary_example" | "vocabulary_recording" | "quiz";
+  instruction_kind: "general" | "grading" | "other";
   title: string | null;
   instruction: string | null;
   script_text: string | null;
@@ -412,6 +413,7 @@ async function mapAssignmentWithSignedUrls(row: AssignmentRow): Promise<Assignme
       id: part.id,
       assignmentId: part.assignment_id,
       partType: part.part_type,
+      instructionKind: part.instruction_kind,
       title: part.title ?? undefined,
       instruction: part.instruction ?? undefined,
       scriptText: part.script_text ?? undefined,
@@ -616,6 +618,7 @@ export const studentAssignmentRepository = {
                   'id', ap.id,
                   'assignment_id', ap.assignment_id,
                   'part_type', ap.part_type,
+                  'instruction_kind', ap.instruction_kind,
                   'title', ap.title,
                   'instruction', ap.instruction,
                   'script_text', ap.script_text,

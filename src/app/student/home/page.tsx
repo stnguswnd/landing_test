@@ -67,6 +67,13 @@ function assignmentTypeLabel(type: string) {
 
 function assignmentTypeTags(assignment: AssignmentWithTarget) {
   const activeParts = getActiveAssignmentParts(assignment.parts);
+  if (getCanonicalAssignmentType(assignment) === "material") {
+    return Array.from(new Set(activeParts.filter((part) => part.partType === "instruction").map((part) => {
+      if (part.instructionKind === "grading") return "채점";
+      if (part.instructionKind === "other") return "기타";
+      return "안내";
+    })));
+  }
   if (!isMultipartAssignment(assignment)) return [assignmentTypeLabel(getCanonicalAssignmentType(assignment))];
 
   const labels = activeParts
@@ -289,7 +296,20 @@ function HomeworkSubjectCard({ assignment }: { assignment: AssignmentWithTarget 
   const needsResubmit = assignment.targetStatus === "returned";
   const hasSubmitted = hasCurrentSubmission(assignment);
   const hasDraft = Boolean(assignment.draft) && !hasSubmitted && !needsResubmit;
+  const isMaterial = getCanonicalAssignmentType(assignment) === "material";
   const href = hasSubmitted && !needsResubmit ? `/student/assignments/${assignment.id}/complete` : `/student/assignments/${assignment.id}`;
+  if (isMaterial) {
+    return (
+      <Card className="flex min-h-[300px] flex-col !p-2 sm:min-h-[340px]">
+        <div className="flex flex-wrap gap-2">
+          <Badge tone="blue">{subjectForAssignment(assignment)}</Badge>
+          {assignmentTypeTags(assignment).map((label) => <Badge key={label}>{label}</Badge>)}
+        </div>
+        <div className="mt-4 flex-1 sm:mt-5"><h3 className="text-base font-bold leading-[1.35] sm:text-2xl">{assignment.title}</h3></div>
+        <HomeworkActionButton href={`/student/assignments/${assignment.id}`}>내용 보기</HomeworkActionButton>
+      </Card>
+    );
+  }
   const buttonLabel = needsResubmit ? "다시 제출하기" : hasSubmitted ? "제출 내용 보기" : hasDraft ? "숙제 이어하기" : "숙제하기";
   const passageTitle = item?.title && item.title !== assignment.title ? item.title : "";
 

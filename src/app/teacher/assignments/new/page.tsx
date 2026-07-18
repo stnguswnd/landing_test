@@ -57,6 +57,7 @@ type QuizQuestionState = {
 type AssignmentPartState = {
   id?: string;
   partType: AssignmentPartType;
+  instructionKind: "general" | "grading" | "other";
   title: string;
   instruction: string;
   scriptText: string;
@@ -106,7 +107,7 @@ type TemplateState = {
   parts: AssignmentPartState[];
 };
 
-const assignmentPartTypes: AssignmentPartType[] = ["recording", "listening", "writing", "vocabulary_example", "vocabulary_recording", "photo_submission", "quiz"];
+const assignmentPartTypes: AssignmentPartType[] = ["instruction", "recording", "listening", "writing", "vocabulary_example", "vocabulary_recording", "photo_submission", "quiz"];
 const MAX_IMAGE_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_AUDIO_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_ASSIGNMENT_UPLOAD_BYTES = 100 * 1024 * 1024;
@@ -125,6 +126,7 @@ function partTypeLabel(type: AssignmentPartType) {
 }
 
 function partTypeForAssignmentType(type: AssignmentType | ""): AssignmentPartType {
+  if (type === "material") return "instruction";
   if (type === "listening") return "listening";
   if (type === "writing") return "writing";
   if (type === "photo_submission") return "photo_submission";
@@ -135,6 +137,7 @@ function partTypeForAssignmentType(type: AssignmentType | ""): AssignmentPartTyp
 }
 
 function assignmentTypeForPartType(type: AssignmentPartType): AssignmentType {
+  if (type === "instruction") return "material";
   if (type === "listening") return "listening";
   if (type === "writing") return "writing";
   if (type === "photo_submission") return "photo_submission";
@@ -146,6 +149,7 @@ function assignmentTypeForPartType(type: AssignmentPartType): AssignmentType {
 
 function assignmentTypeForParts(parts: AssignmentPartState[]): AssignmentType {
   const contentParts = parts.filter((part) => part.partType !== "instruction");
+  if (contentParts.length === 0) return "material";
   const types = Array.from(new Set(contentParts.map((part) => assignmentTypeForPartType(part.partType))));
   if (types.length === 1) return types[0];
   return "listening_recording";
@@ -295,6 +299,7 @@ function createPart(type: AssignmentType | "", index: number): AssignmentPartSta
   const partType = type ? partTypeForAssignmentType(type) : "recording";
   return {
     partType,
+    instructionKind: "general",
     title: `Part ${index + 1}`,
     instruction: "",
     scriptText: "",
@@ -363,6 +368,7 @@ function assignmentPartsFromApi(assignment: {
   parts?: Array<{
     id?: string;
     partType?: AssignmentPartType;
+    instructionKind?: "general" | "grading" | "other";
     title?: string;
     instruction?: string;
     scriptText?: string;
@@ -404,6 +410,7 @@ function assignmentPartsFromApi(assignment: {
           return {
             id: part.id,
             partType: part.partType ?? createPart(assignment.type ?? "listening_recording", index).partType,
+            instructionKind: part.instructionKind ?? "general",
             title: part.title ?? `Part ${index + 1}`,
             instruction: part.instruction ?? "",
             scriptText: part.scriptText ?? "",
@@ -1017,6 +1024,7 @@ function NewAssignmentForm() {
       formData.set("parts", JSON.stringify(template.parts.map((part, index) => ({
         id: part.id,
         partType: part.partType,
+        instructionKind: part.instructionKind,
         title: part.title,
         instruction: part.instruction,
         scriptText: part.scriptText,
@@ -1139,6 +1147,16 @@ function NewAssignmentForm() {
                           {assignmentPartTypes.map((type) => <option key={type} value={type}>{partTypeLabel(type)}</option>)}
                         </Select>
                       </label>
+                      {part.partType === "instruction" && (
+                        <label className="grid gap-2 text-sm font-semibold">
+                          학생에게 표시할 유형
+                          <Select value={part.instructionKind} onChange={(event) => updatePart(index, { instructionKind: event.target.value as AssignmentPartState["instructionKind"] })}>
+                            <option value="grading">채점</option>
+                            <option value="other">기타</option>
+                            <option value="general">안내</option>
+                          </Select>
+                        </label>
+                      )}
                       <label className="grid gap-2 text-sm font-semibold">
                         파트 제목
                         <Input value={part.title} onChange={(event) => updatePart(index, { title: event.target.value })} />

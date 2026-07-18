@@ -34,6 +34,12 @@ function partTypeLabel(type: AssignmentPart["partType"]) {
   return "단어 녹음 숙제";
 }
 
+function instructionKindLabel(part: AssignmentPart) {
+  if (part.instructionKind === "grading") return "채점";
+  if (part.instructionKind === "other") return "기타";
+  return "안내";
+}
+
 function assignmentForPart(assignment: Assignment, part: AssignmentPart, assignmentType: Assignment["assignmentType"]): Assignment {
   const image = (part.attachments ?? []).find((attachment) => attachment.attachmentType === "image");
   const audio = (part.attachments ?? []).find((attachment) => attachment.attachmentType === "audio");
@@ -91,6 +97,7 @@ function HomeworkByPart({
   label?: string;
   tooltip?: string;
 }) {
+  if (part.partType === "instruction") return <PartContent part={part} />;
   const assignmentType = assignmentTypeFromPartType(part.partType);
   const partMode = onSavePart ? { onSave: onSavePart, label, tooltip } : undefined;
   const draftData = (assignment.draft?.draftData?.[part.id] ?? undefined) as Record<string, unknown> | undefined;
@@ -128,7 +135,7 @@ function PartContent({ part }: { part: AssignmentPart }) {
   return (
     <Card>
       <div className="flex flex-wrap items-center gap-2">
-        <Badge tone="green">{partTypeLabel(part.partType)}</Badge>
+        <Badge tone="green">{part.partType === "instruction" ? instructionKindLabel(part) : partTypeLabel(part.partType)}</Badge>
         {part.isRequired && <Badge tone="yellow">필수</Badge>}
         {part.allowSubmission && <Badge tone="blue">제출 필요</Badge>}
       </div>

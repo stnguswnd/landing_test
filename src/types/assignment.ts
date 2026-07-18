@@ -78,6 +78,7 @@ export type AssignmentPart = {
   id: string;
   assignmentId: string;
   partType: "instruction" | "listening" | "recording" | "writing" | "photo_submission" | "vocabulary_example" | "vocabulary_recording" | "quiz";
+  instructionKind?: "general" | "grading" | "other";
   title?: string;
   instruction?: string;
   scriptText?: string;

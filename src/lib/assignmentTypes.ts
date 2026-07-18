@@ -1,4 +1,5 @@
 export type AssignmentType =
+  | "material"
   | "listening_recording"
   | "listening"
   | "writing"
@@ -8,6 +9,7 @@ export type AssignmentType =
   | "quiz";
 
 export type AssignmentItemType =
+  | "material"
   | "listening_recording"
   | "listening"
   | "writing_prompt"
@@ -23,6 +25,7 @@ export type WritingUnit = "paragraphs" | "sentences";
 export type AssignmentSubject = string;
 
 const SUPPORTED_ASSIGNMENT_TYPES = [
+  "material",
   "listening_recording",
   "listening",
   "writing",
@@ -43,6 +46,7 @@ export function normalizeAssignmentType(value: string | null | undefined): Assig
 
 export function assignmentTypeLabel(value: string | null | undefined) {
   const type = normalizeAssignmentType(value);
+  if (type === "material") return "자료 보기";
   if (type === "vocabulary_example") return "단어장 예문";
   if (type === "vocabulary_recording") return "단어장 녹음";
   if (type === "photo_submission") return "사진 제출";
@@ -66,6 +70,7 @@ export function assignmentSubjectForType() {
 
 export function itemTypeForAssignmentType(value: string | null | undefined): AssignmentItemType {
   const type = normalizeAssignmentType(value);
+  if (type === "material") return "material";
   if (type === "vocabulary_example") return "vocabulary_example";
   if (type === "vocabulary_recording") return "vocabulary_recording";
   if (type === "photo_submission") return "photo_submission";
@@ -80,6 +85,7 @@ export function normalizeAssignmentItemType(
 ): AssignmentItemType {
   if (
     itemType === "listening" ||
+    itemType === "material" ||
     itemType === "listening_recording" ||
     itemType === "writing_prompt" ||
     itemType === "vocabulary_example" ||
