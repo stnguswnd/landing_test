@@ -6,6 +6,7 @@ import { AudioPlayer } from "@/components/ui/AudioPlayer";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { TEACHER_REVIEW_UPDATED_KEY } from "@/components/layout/TeacherReviewRefreshGuard";
 import { Textarea } from "@/components/ui/Textarea";
 import { assignmentSubjectLabel, assignmentTypeLabel, normalizeAssignmentType, writingModeLabel, writingUnitLabel } from "@/lib/assignmentTypes";
 import { formatDateTime } from "@/lib/format";
@@ -67,6 +68,7 @@ export function SubmissionReviewPanel({ detail }: { detail: SubmissionDetail }) 
         setStatus(nextStatus);
         setReviewedAt(data?.reviewedAt ?? new Date().toISOString());
         setMessage(nextStatus === "reviewed" ? "승인 피드백을 저장했습니다." : "반려 피드백을 저장했습니다.");
+        sessionStorage.setItem(TEACHER_REVIEW_UPDATED_KEY, "1");
         setResultStatus(nextStatus);
       } catch {
         setMessage("검토 저장 중 오류가 발생했습니다.");
