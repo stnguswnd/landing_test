@@ -47,6 +47,7 @@ export async function GET(_request: Request, context: { params: Promise<{ classI
       left join class_subjects cs on cs.id = at.class_subject_id and cs.teacher_id = a.teacher_id
       join students s on s.id = at.student_id
       where a.teacher_id = $2
+        and a.assignment_type <> 'material'
       group by a.id, at.class_subject_id, cs.name
       order by coalesce(min(at.due_at), a.due_at, a.created_at) desc
     `,

@@ -97,6 +97,7 @@ export async function GET(request: Request) {
       left join assignments a
         on a.id = at.assignment_id
        and a.teacher_id = c.teacher_id
+       and a.assignment_type <> 'material'
        and (
          at.class_id = c.id
          or (
