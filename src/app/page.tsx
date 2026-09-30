@@ -5,9 +5,10 @@ import { redirect } from "next/navigation";
 import { Contact } from "@/components/landing/contact";
 import { Curriculum } from "@/components/landing/curriculum";
 import { Hero } from "@/components/landing/hero";
-import { Points } from "@/components/landing/points";
+import { LandingAnalytics } from "@/components/landing/landing-analytics";
 import { Roadmap } from "@/components/landing/roadmap";
 import { ShowcaseCarousel } from "@/components/landing/showcase-carousel";
+import { StudentReviews } from "@/components/landing/student-reviews";
 import { TeacherProfile } from "@/components/landing/teacher-profile";
 import { Footer } from "@/components/layout/footer";
 import { MobileStickyCta } from "@/components/layout/mobile-sticky-cta";
@@ -90,13 +91,14 @@ export default async function HomePage() {
 
   return (
     <>
+      <LandingAnalytics />
       <main className="page-shell landing-root">
         <SectionNav />
         <Hero />
         <TeacherProfile />
         <Curriculum />
         <Roadmap />
-        <Points />
+        <StudentReviews />
         <ShowcaseCarousel />
         <Contact />
         <MobileStickyCta />
