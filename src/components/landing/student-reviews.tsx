@@ -114,7 +114,7 @@ export function StudentReviews() {
           <span>“울면서 공부했는데, 지금은 너무 재밌다고 해요”</span>
           <span>“중학교부터는 영어학원 안다녔어요”</span>
         </h2>
-        <p>공부하는 즐거움을 알게 된 학생들과 학부모들의 생생한 후기</p>
+        <p>2026년도 학생들과 학부모들의 생생한 후기</p>
       </div>
 
       <StudentReviewGallery images={reviewImages} />
